@@ -15,7 +15,8 @@ from app.config import CONTINUE_ACTION, TIME_SLOT_PREFIX
 from app.models import User
 from app.enums import Status
 from app.logs import describe, get_logger
-from app.utils import get_message
+from app.services.questions import deliver_question
+from app.utils import current_user, get_message
 from app.handlers.menu import main_menu_keyboard
 from app.texts import *
 from app.services.slots import (
@@ -227,11 +228,18 @@ async def handle_ready(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     await query.edit_message_reply_markup(reply_markup=None)
 
-    # A reply keyboard can't ride along on an edit, so the menu needs its own message.
+    user = current_user(update)
+
+    # The menu is a reply keyboard, which can't ride along on an edit and
+    # can't share a message with the question's inline buttons — so it gets
+    # its own short message, sent before the question lands.
     await query.message.reply_text(
-        onboarding_first_question_placeholder,
+        onboarding_menu_ready_message,
         reply_markup=main_menu_keyboard(),
     )
+
+    logger.info("user=%s finished onboarding; sending first question", user.telegram_id)
+    await deliver_question(context.bot, user, reason="onboarding")
 
     return ConversationHandler.END
 

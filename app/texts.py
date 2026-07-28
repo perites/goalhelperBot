@@ -94,9 +94,10 @@ onboarding_ready_message = '''
 
 onboarding_ready_button = '''Так, почати'''
 
-onboarding_first_question_placeholder = '''
-День 1 із 30.
-Це буде твоє перше питання дня 🙂
+onboarding_menu_ready_message = '''
+Меню завжди під рукою — там можна подивитися свій намір, статистику, змінити час повідомлень або зробити паузу.
+
+А ось і перше питання 👇
 '''
 
 menu_my_info_button = '''📝 Моя інформація'''

@@ -23,7 +23,7 @@ from app.services.cycle import (
     users_with_expired_pause,
 )
 from app.logs import get_logger
-from app.services.questions import send_question
+from app.services.questions import deliver_question
 
 logger = get_logger(__name__)
 
@@ -78,24 +78,11 @@ async def send_due_questions(bot, now):
             logger.debug("user=%s already had a question this hour", user.telegram_id)
             continue
 
-        # One unreachable user (blocked the bot, deleted account) must not
-        # stop everyone else from getting theirs.
-        try:
-            answer = await send_question(bot, user)
-        except Exception:  # noqa: BLE001
+        if await deliver_question(bot, user, reason="scheduled") is None:
             failed += 1
-            logger.warning("Failed to send question to user=%s", user.telegram_id, exc_info=True)
-            continue
-
-        if answer is None:
-            logger.warning("Question bank is empty; nothing sent to user=%s", user.telegram_id)
             continue
 
         sent += 1
-        logger.info(
-            "Sent question to user=%s day=%s question=%s",
-            user.telegram_id, answer.cycle_day, answer.question_id,
-        )
 
     if sent or failed:
         logger.info(

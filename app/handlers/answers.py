@@ -18,9 +18,9 @@ from app.logs import describe, get_logger
 from app.models import Answer, User
 from app.services.cycle import complete_cycle, reached_final_day, send_closing_summary
 from app.services.questions import (
+    deliver_question,
     pending_answer,
     pending_final_answer,
-    send_question,
     show_resolved_answer,
     show_resolved_final_answer,
 )
@@ -193,9 +193,11 @@ async def handle_ask_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     logger.info("/ask used by user=%s targeting user=%s", update.effective_user.id, telegram_id)
 
-    answer = await send_question(context.bot, user)
+    answer = await deliver_question(context.bot, user, reason="manual")
     if answer is None:
-        await update.message.reply_text("Question bank is empty.")
+        await update.message.reply_text(
+            f"Nothing sent to {telegram_id} — see the log for why."
+        )
         return
 
     await update.message.reply_text(

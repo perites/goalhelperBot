@@ -149,6 +149,36 @@ async def send_question(bot, user):
     return answer
 
 
+async def deliver_question(bot, user, reason):
+    """Send the next question and log the outcome. Returns the Answer, or None
+    if nothing went out.
+
+    Never raises — one unreachable user (blocked the bot, deleted account)
+    must not break whatever loop the caller is in. `reason` says what
+    triggered it, so the log distinguishes scheduled sends from manual ones.
+    """
+    try:
+        answer = await send_question(bot, user)
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "Failed to send question to user=%s (%s)", user.telegram_id, reason, exc_info=True
+        )
+        return None
+
+    if answer is None:
+        logger.warning(
+            "Question bank is empty; nothing sent to user=%s (%s)", user.telegram_id, reason
+        )
+        return None
+
+    logger.info(
+        "Sent question to user=%s day=%s question=%s (%s)",
+        user.telegram_id, answer.cycle_day, answer.question_id, reason,
+    )
+
+    return answer
+
+
 async def show_resolved_answer(bot, answer):
     """Rewrite the original question message so the answer sits beneath it,
     which also clears the buttons."""
