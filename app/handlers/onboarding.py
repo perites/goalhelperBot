@@ -14,6 +14,7 @@ from app.services.cohort import join_cohort, put_on_waitlist
 from app.config import CONTINUE_ACTION, TIME_SLOT_PREFIX
 from app.models import User
 from app.enums import Status
+from app.logs import describe, get_logger
 from app.utils import get_message
 from app.handlers.menu import main_menu_keyboard
 from app.texts import *
@@ -25,8 +26,9 @@ from app.services.slots import (
     toggle_slot,
 )
 
-CONSENT, NAME, CATEGORY, INTENTION, TIME_SLOTS, CONFIRM, READY = range(7)
+logger = get_logger(__name__)
 
+CONSENT, NAME, CATEGORY, INTENTION, TIME_SLOTS, CONFIRM, READY = range(7)
 
 
 async def begin_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -58,6 +60,7 @@ async def handle_consent(update: Update, context: ContextTypes.DEFAULT_TYPE):
         User.update(consent=False, status=Status.DECLINED).where(
             User.telegram_id == update.effective_user.id
         ).execute()
+        logger.info("user=%s declined data processing", update.effective_user.id)
         await query.edit_message_text(consent_declined_message)
         return ConversationHandler.END
 
@@ -182,6 +185,9 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Seats are only taken on completed onboarding, so the cohort can fill up
     # while this user is still answering. Check again before claiming one.
     if not join_cohort(user):
+        logger.warning(
+            "user=%s finished onboarding but the cohort filled up meanwhile", telegram_id
+        )
         put_on_waitlist(user)
         await query.message.reply_text(cohort_waitlist_full_message)
         return ConversationHandler.END
@@ -196,6 +202,12 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ).where(User.telegram_id == telegram_id).execute()
 
     save_slots(telegram_id, data["time_slots"])
+
+    logger.info(
+        "user=%s completed onboarding: category=%s slots=%s intention=%s",
+        telegram_id, data["intention_type"], sorted(data["time_slots"]),
+        describe(data["intention"]),
+    )
 
     await query.edit_message_text(onboarding_confirmed_message)
     return await ask_ready(update)
@@ -247,3 +259,4 @@ onboarding_conv_handler = ConversationHandler(
     },
     fallbacks=[CommandHandler("cancel", cancel)],
 )
+

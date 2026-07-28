@@ -3,6 +3,7 @@
 This module must not import anything else from the project — everything else
 imports it, so keeping it dependency-free avoids circular imports.
 """
+import os
 from datetime import time
 
 # --- Storage ---------------------------------------------------------------
@@ -56,6 +57,43 @@ TOP_EMOTIONS_SHOWN = 3
 # --- Contacts --------------------------------------------------------------
 
 KSENIA_TELEGRAM = "@kryskaks"
+
+# --- Logging ---------------------------------------------------------------
+
+LOG_DIR = "logs"
+LOG_FILE_NAME = "bot.log"
+
+# Everything at this level and above reaches the file and the console.
+LOG_LEVEL = "INFO"
+LOG_FORMAT = "%(asctime)s %(levelname)-8s %(name)s | %(message)s"
+LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+# The log rotates at midnight; this many days are kept.
+LOG_RETENTION_DAYS = 30
+
+# --- Admin alerts ----------------------------------------------------------
+
+# Records at this level and above are also delivered to the admin chats.
+ALERT_LEVEL = "WARNING"
+
+# An identical alert is sent at most once per window; repeats inside it are
+# counted and reported with the next one that gets through.
+ALERT_DEDUPE_WINDOW_SECONDS = 300
+
+# Hard ceiling on delivery, so a tight failure loop can't flood a phone.
+ALERT_MAX_PER_MINUTE = 5
+
+# Never log the text of an answer, an intention, or a name — participants
+# consented to those being stored for their own reflection, not for ops.
+# Helpers below describe content without reproducing it.
+LOG_TEXT_PREVIEW = False
+
+
+def admin_chat_ids():
+    """Read at call time so an unset value never blocks module import."""
+    raw = os.getenv("ADMIN_CHAT_IDS", "")
+
+    return [int(part) for part in raw.replace(" ", "").split(",") if part]
 
 # --- Callback data prefixes ------------------------------------------------
 

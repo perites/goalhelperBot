@@ -3,6 +3,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CommandHandler, ContextTypes
 
 from app.enums import EnrollmentState, Status
+from app.logs import get_logger
 from app.handlers.menu import main_menu_keyboard
 from app.models import User
 from app.services.cohort import enrollment_state, put_on_waitlist
@@ -15,6 +16,8 @@ from app.texts import (
     start_message,
     start_message_button,
 )
+
+logger = get_logger(__name__)
 
 WAITLIST_MESSAGES = {
     EnrollmentState.FULL: cohort_waitlist_full_message,
@@ -30,9 +33,11 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         defaults={"status": Status.ONBOARDING, "username": update.effective_user.username},
     )
 
+
     # Re-running onboarding would reset an active participant's cycle, so just
     # restore their menu instead.
     if user.status in (Status.ACTIVE, Status.PAUSED):
+        logger.info("/start from active user=%s on day %s", user.telegram_id, user.cycle_day)
         await update.message.reply_text(start_message, reply_markup=main_menu_keyboard())
         return
 
@@ -46,9 +51,14 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     state = enrollment_state()
     if state != EnrollmentState.OPEN:
+        logger.info(
+            "/start from user=%s refused: enrollment is %s", user.telegram_id, state.name
+        )
         put_on_waitlist(user)
         await update.message.reply_text(WAITLIST_MESSAGES[state])
         return
+
+    logger.info("/start from new user=%s; enrollment open", user.telegram_id)
 
     keyboard = [[InlineKeyboardButton(start_message_button, callback_data="start:onboarding")]]
 

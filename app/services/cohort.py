@@ -4,7 +4,10 @@ from datetime import timedelta
 from app import clock
 from app.config import DEFAULT_ENROLLMENT_WINDOW_DAYS, DEFAULT_MAX_PEOPLE
 from app.enums import CohortStatus, EnrollmentState, Status
+from app.logs import get_logger
 from app.models import Cohort, User
+
+logger = get_logger(__name__)
 
 # Statuses that occupy one of the cohort's seats. A user still in ONBOARDING
 # has not taken a seat yet, so the cap is checked again when they confirm.
@@ -18,12 +21,20 @@ def seed_default_cohort():
 
     today = clock.today_kyiv()
 
-    return Cohort.create(
+    cohort = Cohort.create(
         enrollment_opens=today,
         enrollment_closes=today + timedelta(days=DEFAULT_ENROLLMENT_WINDOW_DAYS),
         max_people=DEFAULT_MAX_PEOPLE,
         status=CohortStatus.ENROLLING,
     )
+
+    logger.warning(
+        "No cohort existed; created a default one open %s..%s with %s seats. "
+        "Set real dates before the pilot starts.",
+        cohort.enrollment_opens, cohort.enrollment_closes, cohort.max_people,
+    )
+
+    return cohort
 
 
 def current_cohort():
@@ -76,10 +87,16 @@ def join_cohort(user, cohort=None):
     cohort = cohort or current_cohort()
 
     if cohort is None or seats_left(cohort) <= 0:
+        logger.warning("user=%s could not claim a seat: cohort full or missing", user.telegram_id)
         return False
 
     user.cohort = cohort
     user.save()
+
+    logger.info(
+        "user=%s joined cohort=%s (%s seat(s) left)",
+        user.telegram_id, cohort.id, seats_left(cohort),
+    )
 
     return True
 
@@ -88,6 +105,8 @@ def put_on_waitlist(user):
     user.status = Status.WAITLIST
     user.cohort = None
     user.save()
+
+    logger.info("user=%s put on the waitlist", user.telegram_id)
 
 
 def cohort_is_complete(cohort):

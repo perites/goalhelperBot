@@ -22,7 +22,10 @@ from app.services.cycle import (
     users_due_for_completion,
     users_with_expired_pause,
 )
+from app.logs import get_logger
 from app.services.questions import send_question
+
+logger = get_logger(__name__)
 
 TICK_INTERVAL = timedelta(hours=TICK_INTERVAL_HOURS)
 
@@ -62,31 +65,75 @@ def already_sent_this_hour(user, now):
 
 
 async def send_due_questions(bot, now):
+    due = users_due_at(now.hour)
     sent = 0
+    skipped = 0
+    failed = 0
 
-    for user in users_due_at(now.hour):
+    logger.debug("Hour %02d: %s user(s) due", now.hour, len(due))
+
+    for user in due:
         if already_sent_this_hour(user, now):
+            skipped += 1
+            logger.debug("user=%s already had a question this hour", user.telegram_id)
             continue
 
-        await send_question(bot, user)
+        # One unreachable user (blocked the bot, deleted account) must not
+        # stop everyone else from getting theirs.
+        try:
+            answer = await send_question(bot, user)
+        except Exception:  # noqa: BLE001
+            failed += 1
+            logger.warning("Failed to send question to user=%s", user.telegram_id, exc_info=True)
+            continue
+
+        if answer is None:
+            logger.warning("Question bank is empty; nothing sent to user=%s", user.telegram_id)
+            continue
+
         sent += 1
+        logger.info(
+            "Sent question to user=%s day=%s question=%s",
+            user.telegram_id, answer.cycle_day, answer.question_id,
+        )
+
+    if sent or failed:
+        logger.info(
+            "Hour %02d done: sent=%s skipped=%s failed=%s", now.hour, sent, skipped, failed
+        )
 
     return sent
 
 
 async def run_sweep(bot):
     """Daily housekeeping: expire pauses, close out cycles, end the cohort."""
+    logger.info("Daily sweep starting")
+
+    resumed = 0
     for user in list(users_with_expired_pause()):
         resume_user(user)
+        resumed += 1
+        logger.info("Pause expired, user=%s resumed", user.telegram_id)
 
-    # Users who never answered on day 30, so the answer-triggered handoff
-    # never fired. They get the closing block here instead.
+    # Users who never answered on their last day, so the answer-triggered
+    # handoff never fired. They get the closing block here instead.
+    completed = 0
     for user in users_due_for_completion():
-        await complete_cycle(bot, user)
+        try:
+            await complete_cycle(bot, user)
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to complete cycle for user=%s", user.telegram_id, exc_info=True)
+            continue
+
+        completed += 1
+        logger.info("Cycle completed for user=%s", user.telegram_id)
 
     cohort = current_cohort()
     if cohort is not None and cohort_is_complete(cohort):
         end_cohort(cohort)
+        logger.info("Cohort id=%s ended: no participants still running", cohort.id)
+
+    logger.info("Daily sweep done: resumed=%s completed=%s", resumed, completed)
 
 
 async def hourly_tick(context: ContextTypes.DEFAULT_TYPE):
@@ -102,10 +149,16 @@ def schedule(application):
     """Run on the hour, every hour, in Kyiv time."""
     now = clock.now_kyiv()
     next_hour = (now + TICK_INTERVAL).replace(minute=0, second=0, microsecond=0)
+    delay = (next_hour - now).total_seconds()
 
     application.job_queue.run_repeating(
         hourly_tick,
         interval=TICK_INTERVAL,
-        first=(next_hour - now).total_seconds(),
+        first=delay,
         name="hourly_tick",
+    )
+
+    logger.info(
+        "Scheduler armed: first tick at %s (in %.0f min), then every %s h",
+        next_hour.strftime("%H:%M"), delay / 60, TICK_INTERVAL_HOURS,
     )

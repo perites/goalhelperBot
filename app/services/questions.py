@@ -9,6 +9,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app import clock
 from app.config import QUESTION_ORDER_STEP
+from app.logs import get_logger
 from app.models import Answer, FinalAnswer, FinalQuestion, Question
 from app.texts import (
     final_questions,
@@ -20,6 +21,8 @@ from app.texts import (
     question_skipped_suffix,
     sample_questions,
 )
+
+logger = get_logger(__name__)
 
 
 def seed_questions():
@@ -37,6 +40,11 @@ def seed_questions():
     if not FinalQuestion.select().exists():
         for position, text in enumerate(final_questions, start=1):
             FinalQuestion.create(text=text, order=position * QUESTION_ORDER_STEP)
+
+    logger.info(
+        "Question banks ready: %s daily, %s closing",
+        Question.select().count(), FinalQuestion.select().count(),
+    )
 
 
 # --- Daily rotation --------------------------------------------------------
@@ -133,6 +141,11 @@ async def send_question(bot, user):
         answer.message_id = message.message_id
         answer.save()
 
+    logger.debug(
+        "Question sent: user=%s answer=%s question=%s day=%s",
+        user.telegram_id, answer.id, question.id, answer.cycle_day,
+    )
+
     return answer
 
 
@@ -176,6 +189,7 @@ async def send_closing_block(bot, user):
 
     questions = [q.text for q in FinalQuestion.select().order_by(FinalQuestion.order)]
     if not questions:
+        logger.warning("Closing block requested but no closing questions exist")
         return None
 
     body = final_questions_block(user.cycle_length, questions)
@@ -188,6 +202,8 @@ async def send_closing_block(bot, user):
     if message is not None:
         final_answer.message_id = message.message_id
         final_answer.save()
+
+    logger.info("Closing block sent to user=%s (%s questions)", user.telegram_id, len(questions))
 
     return final_answer
 
@@ -205,3 +221,4 @@ async def show_resolved_final_answer(bot, final_answer):
             answer=final_answer.answer
         ),
     )
+

@@ -1,4 +1,5 @@
 """Entry point: wiring and startup."""
+import asyncio
 import os
 
 from dotenv import load_dotenv
@@ -6,6 +7,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from telegram.ext import Application
+
+from app.config import admin_chat_ids
+from app.logs import alert_handler, configure_logging, get_logger
 
 from app.handlers.answers import (
     answer_button_handler,
@@ -33,6 +37,8 @@ from app.models import initialize_database
 from app.services.cohort import seed_default_cohort
 from app.services.questions import seed_questions
 from app.services.scheduler import schedule
+
+logger = get_logger(__name__)
 
 
 def register_handlers(app):
@@ -64,20 +70,54 @@ def register_handlers(app):
 
     app.add_error_handler(error_handler)
 
+    logger.info("Registered %s handler group(s)", len(app.handlers[0]))
+
+
+async def on_startup(app):
+    """Runs once the event loop exists, which the alert handler needs before
+    it can schedule sends."""
+    alert_handler.bind(app.bot, asyncio.get_running_loop())
+
+    recipients = admin_chat_ids()
+    if recipients:
+        logger.info("Admin alerts enabled for %s chat(s)", len(recipients))
+    else:
+        logger.warning("ADMIN_CHAT_IDS is unset — no one will receive alerts")
+
+    me = await app.bot.get_me()
+    logger.info("Connected to Telegram as @%s (id=%s)", me.username, me.id)
+
+
+async def on_shutdown(app):
+    logger.info("Bot stopping")
+
 
 def main():
+    configure_logging()
+    logger.info("Starting up")
+
     # Kept out of module scope so importing this module has no side effects
     # on the database — tests import it freely.
     initialize_database()
     seed_questions()
     seed_default_cohort()
 
-    app = Application.builder().token(os.getenv("BOT_TOKEN")).build()
+    token = os.getenv("BOT_TOKEN")
+    if not token:
+        logger.critical("BOT_TOKEN is not set; cannot start")
+        raise SystemExit(1)
+
+    app = (
+        Application.builder()
+        .token(token)
+        .post_init(on_startup)
+        .post_shutdown(on_shutdown)
+        .build()
+    )
 
     register_handlers(app)
     schedule(app)
 
-    print("Bot started...")
     app.run_polling()
 
 

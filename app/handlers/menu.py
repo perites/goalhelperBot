@@ -13,6 +13,7 @@ from telegram.ext import (
 
 from app.config import CONTINUE_ACTION, EDIT_TIME_PREFIX
 from app.enums import Status
+from app.logs import get_logger
 from app.services.cycle import pause_user, resume_user
 from app.services.questions import close_open_answers
 from app.services.slots import (
@@ -26,6 +27,8 @@ from app.services.slots import (
 from app.services.stats import build_stats_text
 from app.texts import *
 from app.utils import current_user
+
+logger = get_logger(__name__)
 
 
 def main_menu_keyboard():
@@ -111,6 +114,8 @@ async def handle_edit_time_save(update: Update, context: ContextTypes.DEFAULT_TY
 
     save_slots(user.telegram_id, selected)
     context.user_data.pop("edit_time_slots", None)
+
+    logger.info("user=%s changed slots to %s", user.telegram_id, sorted(selected))
 
     await query.edit_message_reply_markup(reply_markup=None)
     await query.message.reply_text(menu_edit_times_saved_template.format(times=format_slots(selected)))
@@ -198,6 +203,8 @@ async def handle_finish_confirm(update: Update, context: ContextTypes.DEFAULT_TY
     user.status = Status.STOPPED
     user.save()
 
+    logger.info("user=%s ended participation early on day %s", user.telegram_id, user.cycle_day)
+
     await query.message.reply_text(
         menu_finish_confirmed_message,
         reply_markup=ReplyKeyboardRemove(),
@@ -218,4 +225,5 @@ edit_time_save_handler = CallbackQueryHandler(
 edit_time_toggle_handler = CallbackQueryHandler(
     handle_edit_time_toggle, pattern=f"^{EDIT_TIME_PREFIX}:"
 )
+
 finish_confirm_handler = CallbackQueryHandler(handle_finish_confirm, pattern="^finish:")

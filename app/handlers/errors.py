@@ -1,39 +1,24 @@
-import html
-import os
-import traceback
+"""Catch-all for exceptions raised inside handlers.
 
+This only logs — the alert handler is what forwards it to the admin chats, so
+there's one delivery path rather than two competing ones. Notably it no longer
+dumps the Update, whose repr contains the user's message text.
+"""
+from telegram import Update
 
-def admin_chat_id():
-    """Read at call time, not import time — an unset value shouldn't stop the
-    module being imported."""
-    raw = os.getenv("ADMIN_CHAT_ID")
+from app.logs import get_logger
 
-    return int(raw) if raw else None
+logger = get_logger(__name__)
 
 
 async def error_handler(update, context):
-    chat_id = admin_chat_id()
-    if chat_id is None:
-        return
+    where = "no user"
 
-    # Get full traceback
-    tb = "".join(traceback.format_exception(
-        type(context.error), context.error, context.error.__traceback__
-    ))
+    if isinstance(update, Update) and update.effective_user:
+        where = f"user={update.effective_user.id}"
 
-    # Build message
-    message = (
-        f"⚠️ <b>Bot Error</b>\n\n"
-        f"<b>Error:</b> {html.escape(str(context.error))}\n\n"
-        f"<b>Traceback:</b>\n<pre>{html.escape(tb[-3000:])}</pre>"
-    )
-
-    # Add update info if available
-    if update:
-        message += f"\n\n<b>Update:</b> <pre>{html.escape(str(update))[:500]}</pre>"
-
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=message,
-        parse_mode="HTML"
+    logger.error(
+        "Unhandled exception while processing update (%s)",
+        where,
+        exc_info=context.error,
     )

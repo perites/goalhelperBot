@@ -5,6 +5,7 @@ a cycle, which is what the function-level imports used to work around.
 """
 from app import clock
 from app.enums import Status
+from app.logs import get_logger
 from app.models import User
 from app.services.questions import (
     close_open_answers,
@@ -13,6 +14,8 @@ from app.services.questions import (
 )
 from app.services.stats import build_stats_text
 from app.texts import cycle_final_invite_message, cycle_final_summary_intro
+
+logger = get_logger(__name__)
 
 
 # --- Pausing ---------------------------------------------------------------
@@ -25,6 +28,8 @@ def pause_user(user):
     user.paused_at = clock.now_kyiv()
     user.save()
 
+    logger.info("user=%s paused on day %s", user.telegram_id, user.cycle_day)
+
 
 def resume_user(user):
     """Bank the days spent paused, then put the user back into the cycle.
@@ -35,6 +40,11 @@ def resume_user(user):
 
     user.status = Status.ACTIVE
     user.save()
+
+    logger.info(
+        "user=%s resumed on day %s (%s day(s) banked)",
+        user.telegram_id, user.cycle_day, user.paused_days,
+    )
 
 
 def users_with_expired_pause():
@@ -85,6 +95,7 @@ async def complete_cycle(bot, user):
         return None
 
     finish_user(user)
+    logger.info("user=%s reached day %s and finished", user.telegram_id, user.cycle_day)
 
     return await send_closing_block(bot, user)
 
@@ -96,5 +107,6 @@ async def send_closing_summary(bot, user):
         chat_id=user.telegram_id,
         text=cycle_final_summary_intro.format(total=user.cycle_length),
     )
+
     await bot.send_message(chat_id=user.telegram_id, text=build_stats_text(user))
     await bot.send_message(chat_id=user.telegram_id, text=cycle_final_invite_message)

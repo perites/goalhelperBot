@@ -14,6 +14,7 @@ from telegram.ext import (
 
 from app import clock
 from app.enums import Status
+from app.logs import describe, get_logger
 from app.models import Answer, User
 from app.services.cycle import complete_cycle, reached_final_day, send_closing_summary
 from app.services.questions import (
@@ -31,6 +32,8 @@ from app.texts import (
     question_skipped_message,
 )
 from app.utils import current_user
+
+logger = get_logger(__name__)
 
 
 def _resolvable_answer(answer_id):
@@ -80,6 +83,11 @@ async def handle_skip_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
     answer.answered_at = clock.now_kyiv()
     answer.save()
 
+    logger.info(
+        "user=%s skipped question=%s (day %s)",
+        answer.user_id, answer.question_id, answer.cycle_day,
+    )
+
     # Rewriting the message also drops its buttons.
     await show_resolved_answer(context.bot, answer)
     await query.message.reply_text(question_skipped_message)
@@ -106,6 +114,11 @@ async def handle_option_button(update: Update, context: ContextTypes.DEFAULT_TYP
     answer.answered_at = clock.now_kyiv()
     answer.save()
 
+    logger.info(
+        "user=%s chose option %s for question=%s (day %s)",
+        answer.user_id, index, answer.question_id, answer.cycle_day,
+    )
+
     # Rewriting the message also drops its buttons.
     await show_resolved_answer(context.bot, answer)
 
@@ -127,6 +140,11 @@ async def handle_answer_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         closing.answered_at = clock.now_kyiv()
         closing.save()
 
+        logger.info(
+            "user=%s answered the closing block (%s)",
+            user.telegram_id, describe(closing.answer),
+        )
+
         await show_resolved_final_answer(context.bot, closing)
         await send_closing_summary(context.bot, user)
         return
@@ -138,6 +156,11 @@ async def handle_answer_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
     answer.answer = update.message.text
     answer.answered_at = clock.now_kyiv()
     answer.save()
+
+    logger.info(
+        "user=%s answered question=%s (day %s, %s)",
+        user.telegram_id, answer.question_id, answer.cycle_day, describe(answer.answer),
+    )
 
     await show_resolved_answer(context.bot, answer)
 
@@ -168,6 +191,8 @@ async def handle_ask_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
 
+    logger.info("/ask used by user=%s targeting user=%s", update.effective_user.id, telegram_id)
+
     answer = await send_question(context.bot, user)
     if answer is None:
         await update.message.reply_text("Question bank is empty.")
@@ -189,3 +214,4 @@ answer_text_handler = MessageHandler(
     filters.TEXT & ~filters.COMMAND & ~filters.Text(main_menu_buttons),
     handle_answer_text,
 )
+
