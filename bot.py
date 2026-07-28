@@ -15,11 +15,20 @@ from telegram.ext import (
     Application
 )
 
+from askquestions import (
+    seed_questions,
+    ask_command_handler,
+    answer_button_handler,
+    skip_button_handler,
+    option_button_handler,
+    answer_text_handler,
+)
 from database import User, Status, initialize_database
 from messages_texts import *
 from onboarding import onboarding_conv_handler
 
 initialize_database()
+seed_questions()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -49,6 +58,13 @@ def main():
     app.add_handler(CommandHandler("start", start))
 
     app.add_handler(onboarding_conv_handler)
+
+    # Registered after the onboarding conversation so it claims its own text input first.
+    app.add_handler(ask_command_handler)
+    app.add_handler(answer_button_handler)
+    app.add_handler(skip_button_handler)
+    app.add_handler(option_button_handler)
+    app.add_handler(answer_text_handler)
     # app.add_handler(CallbackQueryHandler(button_handler))
     # app.add_error_handler(error_handler)
 

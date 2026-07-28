@@ -1,3 +1,5 @@
+from database import QuestionType
+
 start_message = '''
 Привіт. Я — “Я хочу бот”.
 Я допоможу тобі протягом 30 днів тримати фокус на твоєму намірі, помічати свій стан, фіксувати маленькі кроки й бачити власний рух.
@@ -88,3 +90,101 @@ onboarding_first_question_placeholder = '''
 День 1 із 30.
 Це буде твоє перше питання дня 🙂
 '''
+
+question_message_template = '''
+День {day} із {total}.
+Твій намір: “{intention}”
+
+Питання дня:
+{question}
+'''
+
+question_answer_button = '''Відповісти'''
+
+question_skip_button = '''Пропустити це питання'''
+
+question_answer_prompt = '''
+Напиши свою відповідь одним повідомленням.
+'''
+
+question_saved_message = '''
+Дякую, я зберіг твою відповідь.
+'''
+
+question_skipped_message = '''
+Добре, пропускаємо це питання.
+Не потрібно нічого надолужувати — достатньо помітити.
+'''
+
+question_already_closed_message = '''
+Це питання вже закрите. Наступне прийде у свій час.
+'''
+
+emotion_options = [
+    "радість",
+    "натхнення",
+    "цікавість",
+    "спокій",
+    "тривога",
+    "злість",
+    "сум",
+    "втома",
+    "розчарування",
+    "байдужість",
+    "інше",
+]
+
+# (text, type, options) — options is None for an open question.
+# Placeholder set until Ксенія provides the real question bank.
+sample_questions = [
+    (
+        "Яку емоцію ти зараз відчуваєш стосовно свого наміру?",
+        QuestionType.EMOTION,
+        emotion_options,
+    ),
+    (
+        "Що ти сьогодні вже зробила / зробив для свого наміру, навіть якщо це був дуже маленький крок?",
+        QuestionType.STEP,
+        None,
+    ),
+    (
+        "Що зараз може стати для тебе точкою опори в русі до цього наміру?",
+        QuestionType.SUPPORT,
+        None,
+    ),
+    (
+        "За що ти сьогодні можеш себе цінувати в контексті свого наміру?",
+        QuestionType.GRATITUDE,
+        None,
+    ),
+    (
+        "Що зараз найбільше заважає тобі рухатися до цього наміру?",
+        QuestionType.OBSTACLE,
+        None,
+    ),
+    (
+        "Яку маленьку перемогу ти можеш сьогодні помітити?",
+        QuestionType.WIN,
+        None,
+    ),
+    (
+        "Що сьогодні важливо не загубити, щоб залишатися в контакті зі своїм наміром?",
+        QuestionType.FOCUS,
+        None,
+    ),
+    (
+        "Який один маленький крок ти можеш зробити сьогодні?",
+        QuestionType.STEP,
+        None,
+    ),
+    (
+        "Яка емоція супроводжує тебе сьогодні найбільше?",
+        QuestionType.EMOTION,
+        emotion_options,
+    ),
+    (
+        "Що сьогодні може допомогти тобі зробити хоча б один маленький крок у напрямку цього наміру?",
+        QuestionType.FOCUS,
+        None,
+    ),
+]

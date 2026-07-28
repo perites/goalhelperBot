@@ -1,3 +1,4 @@
+import json
 from enum import IntEnum
 
 from peewee import (
@@ -30,6 +31,16 @@ class IntentionCategory(IntEnum):
     OTHER = 8
 
 
+class QuestionType(IntEnum):
+    EMOTION = 0
+    STEP = 1
+    SUPPORT = 2
+    GRATITUDE = 3
+    OBSTACLE = 4
+    WIN = 5
+    FOCUS = 6
+
+
 class BaseModel(Model):
     class Meta:
         database = db
@@ -53,6 +64,29 @@ class UserTime(BaseModel):
     time = TimeField()
 
 
+class Question(BaseModel):
+    text = TextField()
+    type = IntegerField()
+    options = TextField(null=True)
+    order = IntegerField(unique=True)
+
+    @property
+    def option_list(self):
+        """Parsed answer options, or None for an open question."""
+        if self.options is None:
+            return None
+        return json.loads(self.options)
+
+
+class Answer(BaseModel):
+    user = ForeignKeyField(User, backref="answers")
+    question = ForeignKeyField(Question, backref="answers")
+    sent_at = DateTimeField()
+    answered_at = DateTimeField(null=True)
+    answer = TextField(null=True)
+    skipped = BooleanField(default=False)
+
+
 def initialize_database():
     db.connect()
-    db.create_tables([User, UserTime], safe=True)
+    db.create_tables([User, UserTime, Question, Answer], safe=True)
