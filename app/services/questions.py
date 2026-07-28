@@ -14,8 +14,10 @@ from app.texts import (
     final_questions,
     final_questions_block,
     question_answer_button,
+    question_answered_suffix,
     question_message_template,
     question_skip_button,
+    question_skipped_suffix,
     sample_questions,
 )
 
@@ -93,6 +95,19 @@ def build_question_keyboard(question, answer):
     return InlineKeyboardMarkup(keyboard)
 
 
+def render_question(answer):
+    """The question message as it was originally sent. Uses the stored
+    cycle_day so a reply arriving the next day doesn't redraw a wrong number."""
+    user = answer.user
+
+    return question_message_template.format(
+        day=answer.cycle_day if answer.cycle_day is not None else user.cycle_day,
+        total=user.cycle_length,
+        intention=user.intention,
+        question=answer.question.text,
+    )
+
+
 async def send_question(bot, user):
     """Close out the previous question, then send the next one."""
     close_open_answers(user)
@@ -101,20 +116,43 @@ async def send_question(bot, user):
     if question is None:
         return None
 
-    answer = Answer.create(user=user, question=question, sent_at=clock.now_kyiv())
+    answer = Answer.create(
+        user=user,
+        question=question,
+        sent_at=clock.now_kyiv(),
+        cycle_day=user.cycle_day,
+    )
 
-    await bot.send_message(
+    message = await bot.send_message(
         chat_id=user.telegram_id,
-        text=question_message_template.format(
-            day=user.cycle_day,
-            total=user.cycle_length,
-            intention=user.intention,
-            question=question.text,
-        ),
+        text=render_question(answer),
         reply_markup=build_question_keyboard(question, answer),
     )
 
+    if message is not None:
+        answer.message_id = message.message_id
+        answer.save()
+
     return answer
+
+
+async def show_resolved_answer(bot, answer):
+    """Rewrite the original question message so the answer sits beneath it,
+    which also clears the buttons."""
+    if answer.message_id is None:
+        return
+
+    body = render_question(answer)
+    body += (
+        question_skipped_suffix if answer.skipped
+        else question_answered_suffix.format(answer=answer.answer)
+    )
+
+    await bot.edit_message_text(
+        chat_id=answer.user.telegram_id,
+        message_id=answer.message_id,
+        text=body,
+    )
 
 
 # --- Closing block ---------------------------------------------------------
@@ -140,11 +178,30 @@ async def send_closing_block(bot, user):
     if not questions:
         return None
 
-    final_answer = FinalAnswer.create(user=user, sent_at=clock.now_kyiv())
-
-    await bot.send_message(
-        chat_id=user.telegram_id,
-        text=final_questions_block(user.cycle_length, questions),
+    body = final_questions_block(user.cycle_length, questions)
+    final_answer = FinalAnswer.create(
+        user=user, sent_at=clock.now_kyiv(), message_text=body,
     )
 
+    message = await bot.send_message(chat_id=user.telegram_id, text=body)
+
+    if message is not None:
+        final_answer.message_id = message.message_id
+        final_answer.save()
+
     return final_answer
+
+
+async def show_resolved_final_answer(bot, final_answer):
+    """Same treatment for the closing block. Its text is stored rather than
+    re-rendered because the question list could be edited in between."""
+    if final_answer.message_id is None or final_answer.message_text is None:
+        return
+
+    await bot.edit_message_text(
+        chat_id=final_answer.user.telegram_id,
+        message_id=final_answer.message_id,
+        text=final_answer.message_text + question_answered_suffix.format(
+            answer=final_answer.answer
+        ),
+    )

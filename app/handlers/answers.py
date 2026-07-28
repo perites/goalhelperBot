@@ -16,7 +16,13 @@ from app import clock
 from app.enums import Status
 from app.models import Answer, User
 from app.services.cycle import complete_cycle, reached_final_day, send_closing_summary
-from app.services.questions import pending_answer, pending_final_answer, send_question
+from app.services.questions import (
+    pending_answer,
+    pending_final_answer,
+    send_question,
+    show_resolved_answer,
+    show_resolved_final_answer,
+)
 from app.texts import (
     main_menu_buttons,
     question_already_closed_message,
@@ -63,10 +69,10 @@ async def handle_answer_button(update: Update, context: ContextTypes.DEFAULT_TYP
 async def handle_skip_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_reply_markup(reply_markup=None)
 
     answer = _resolvable_answer(int(query.data.split(":")[1]))
     if answer is None:
+        await query.edit_message_reply_markup(reply_markup=None)
         await query.message.reply_text(question_already_closed_message)
         return
 
@@ -74,18 +80,20 @@ async def handle_skip_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
     answer.answered_at = clock.now_kyiv()
     answer.save()
 
+    # Rewriting the message also drops its buttons.
+    await show_resolved_answer(context.bot, answer)
     await query.message.reply_text(question_skipped_message)
 
 
 async def handle_option_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_reply_markup(reply_markup=None)
 
     _, answer_id, index = query.data.split(":")
 
     answer = _resolvable_answer(int(answer_id))
     if answer is None:
+        await query.edit_message_reply_markup(reply_markup=None)
         await query.message.reply_text(question_already_closed_message)
         return
 
@@ -97,6 +105,9 @@ async def handle_option_button(update: Update, context: ContextTypes.DEFAULT_TYP
     answer.answer = options[index]
     answer.answered_at = clock.now_kyiv()
     answer.save()
+
+    # Rewriting the message also drops its buttons.
+    await show_resolved_answer(context.bot, answer)
 
     if not await _hand_off_if_final_day(context.bot, current_user(update)):
         await query.message.reply_text(question_saved_message)
@@ -116,6 +127,7 @@ async def handle_answer_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         closing.answered_at = clock.now_kyiv()
         closing.save()
 
+        await show_resolved_final_answer(context.bot, closing)
         await send_closing_summary(context.bot, user)
         return
 
@@ -126,6 +138,8 @@ async def handle_answer_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
     answer.answer = update.message.text
     answer.answered_at = clock.now_kyiv()
     answer.save()
+
+    await show_resolved_answer(context.bot, answer)
 
     if not await _hand_off_if_final_day(context.bot, user):
         await update.message.reply_text(question_saved_message)

@@ -129,6 +129,14 @@ class Answer(BaseModel):
     answer = TextField(null=True)
     skipped = BooleanField(default=False)
 
+    # Needed to edit the question message once it's answered: a typed reply
+    # arrives as a separate message with no reference back to the question.
+    message_id = IntegerField(null=True)
+
+    # The cycle day this was asked on. Stored rather than recomputed, so a
+    # reply that lands the next day doesn't redraw with the wrong number.
+    cycle_day = IntegerField(null=True)
+
     @classmethod
     def open_for(cls, user):
         """Questions sent to this user that are still awaiting a reply."""
@@ -152,6 +160,9 @@ class FinalAnswer(BaseModel):
     sent_at = DateTimeField()
     answered_at = DateTimeField(null=True)
     answer = TextField(null=True)
+
+    message_id = IntegerField(null=True)
+    message_text = TextField(null=True)
 
 
 def initialize_database():

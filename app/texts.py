@@ -309,6 +309,17 @@ question_saved_message = '''
 Дякую, я зберіг твою відповідь.
 '''
 
+# Appended to the original question message once it's resolved, so the chat
+# history reads as a record rather than a list of orphaned prompts.
+question_answered_suffix = '''
+
+✏️ Твоя відповідь:
+{answer}'''
+
+question_skipped_suffix = '''
+
+⏭ Пропущено'''
+
 question_skipped_message = '''
 Добре, пропускаємо це питання.
 Не потрібно нічого надолужувати — достатньо помітити.
