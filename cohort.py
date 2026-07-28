@@ -6,12 +6,8 @@ they'll be driven by the scheduler.
 from datetime import timedelta
 from enum import IntEnum
 
-from clock import now_kyiv, today_kyiv
-from config import (
-    DEFAULT_MAX_PEOPLE,
-    DEFAULT_ENROLLMENT_WINDOW_DAYS,
-    PAUSE_DURATION_DAYS,
-)
+import clock
+from config import DEFAULT_MAX_PEOPLE, DEFAULT_ENROLLMENT_WINDOW_DAYS
 from database import User, Cohort, Status, CohortStatus
 from messages_texts import (
     cycle_final_summary_intro,
@@ -36,7 +32,7 @@ def seed_default_cohort():
     if Cohort.select().exists():
         return Cohort.select().first()
 
-    today = today_kyiv()
+    today = clock.today_kyiv()
 
     return Cohort.create(
         enrollment_opens=today,
@@ -73,7 +69,7 @@ def enrollment_state(cohort=None):
     if cohort is None or cohort.status == CohortStatus.ENDED:
         return EnrollmentState.NO_COHORT
 
-    today = today_kyiv()
+    today = clock.today_kyiv()
 
     if today < cohort.enrollment_opens:
         return EnrollmentState.NOT_OPEN_YET
@@ -114,7 +110,7 @@ def put_on_waitlist(user):
 
 def pause_user(user):
     user.status = Status.PAUSED
-    user.paused_at = now_kyiv()
+    user.paused_at = clock.now_kyiv()
     user.save()
 
 
@@ -130,14 +126,18 @@ def resume_user(user):
 
 
 def users_with_expired_pause():
-    """Paused users whose 3 days are up. For the scheduler to normalise."""
-    cutoff = now_kyiv() - timedelta(days=PAUSE_DURATION_DAYS)
+    """Paused users whose 3 days are up, for the scheduler to normalise.
 
-    return User.select().where(
-        (User.status == Status.PAUSED)
-        & User.paused_at.is_null(False)
-        & (User.paused_at <= cutoff)
+    Filtered through `is_paused` rather than a SQL datetime comparison so this
+    can't disagree with the property: that one counts calendar days, and a
+    cutoff of `now - 3 days` would hold a user in PAUSED for up to a day after
+    their pause had already stopped counting.
+    """
+    candidates = User.select().where(
+        (User.status == Status.PAUSED) & User.paused_at.is_null(False)
     )
+
+    return [user for user in candidates if not user.is_paused]
 
 
 # --- End of cycle --------------------------------------------------------

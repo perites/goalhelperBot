@@ -42,9 +42,6 @@ from messages_texts import *
 from onboarding import onboarding_conv_handler
 from scheduler import schedule
 
-initialize_database()
-seed_questions()
-seed_default_cohort()
 
 
 WAITLIST_MESSAGES = {
@@ -98,6 +95,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
+    # Kept out of module scope so importing this module has no side effects
+    # on the database — tests import it freely.
+    initialize_database()
+    seed_questions()
+    seed_default_cohort()
+
     app = Application.builder().token(os.getenv("BOT_TOKEN")).build()
     app.add_handler(CommandHandler("start", start))
 

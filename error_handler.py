@@ -2,10 +2,20 @@ import html
 import os
 import traceback
 
-ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID"))
+
+def admin_chat_id():
+    """Read at call time, not import time — an unset value shouldn't stop the
+    module being imported."""
+    raw = os.getenv("ADMIN_CHAT_ID")
+
+    return int(raw) if raw else None
 
 
 async def error_handler(update, context):
+    chat_id = admin_chat_id()
+    if chat_id is None:
+        return
+
     # Get full traceback
     tb = "".join(traceback.format_exception(
         type(context.error), context.error, context.error.__traceback__
@@ -23,7 +33,7 @@ async def error_handler(update, context):
         message += f"\n\n<b>Update:</b> <pre>{html.escape(str(update))[:500]}</pre>"
 
     await context.bot.send_message(
-        chat_id=ADMIN_CHAT_ID,
+        chat_id=chat_id,
         text=message,
         parse_mode="HTML"
     )

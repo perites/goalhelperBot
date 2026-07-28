@@ -7,7 +7,7 @@ from peewee import (
     BooleanField, SQL, DateField, DateTimeField, ForeignKeyField, TimeField,
 )
 
-from clock import now_kyiv
+import clock
 from config import (
     DATABASE_NAME,
     CYCLE_LENGTH_DAYS,
@@ -97,7 +97,7 @@ class User(BaseModel):
         if self.paused_at is None:
             return 0
 
-        elapsed = (now_kyiv().date() - self.paused_at.date()).days
+        elapsed = (clock.now_kyiv().date() - self.paused_at.date()).days
 
         return min(elapsed, PAUSE_DURATION_DAYS)
 
@@ -123,7 +123,7 @@ class User(BaseModel):
         if self.date_started is None:
             return 1
 
-        elapsed = (now_kyiv().date() - self.date_started.date()).days
+        elapsed = (clock.now_kyiv().date() - self.date_started.date()).days
 
         return elapsed - self.total_paused_days + 1
 

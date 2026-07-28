@@ -12,7 +12,7 @@ from datetime import timedelta
 from telegram.ext import ContextTypes
 
 from askquestions import send_question
-from clock import now_kyiv
+import clock
 from config import SWEEP_HOUR, TICK_INTERVAL_HOURS
 from cohort import (
     complete_cycle,
@@ -91,7 +91,7 @@ async def run_sweep(bot):
 
 
 async def hourly_tick(context: ContextTypes.DEFAULT_TYPE):
-    now = now_kyiv()
+    now = clock.now_kyiv()
 
     if now.hour == SWEEP_HOUR:
         await run_sweep(context.bot)
@@ -101,7 +101,7 @@ async def hourly_tick(context: ContextTypes.DEFAULT_TYPE):
 
 def schedule(application):
     """Run on the hour, every hour, in Kyiv time."""
-    now = now_kyiv()
+    now = clock.now_kyiv()
     next_hour = (now + TICK_INTERVAL).replace(minute=0, second=0, microsecond=0)
 
     application.job_queue.run_repeating(

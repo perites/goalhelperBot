@@ -1,5 +1,5 @@
 import json
-from clock import now_kyiv
+import clock
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram import Update
@@ -86,7 +86,7 @@ def _build_question_keyboard(question, answer):
 
 async def deliver(bot, user, question, text):
     """Create the pending Answer row and send it."""
-    answer = Answer.create(user=user, question=question, sent_at=now_kyiv())
+    answer = Answer.create(user=user, question=question, sent_at=clock.now_kyiv())
 
     await bot.send_message(
         chat_id=user.telegram_id,
@@ -136,7 +136,7 @@ async def send_closing_block(bot, user):
     if not questions:
         return None
 
-    final_answer = FinalAnswer.create(user=user, sent_at=now_kyiv())
+    final_answer = FinalAnswer.create(user=user, sent_at=clock.now_kyiv())
 
     await bot.send_message(
         chat_id=user.telegram_id,
@@ -180,7 +180,7 @@ async def handle_skip_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     answer.skipped = True
-    answer.answered_at = now_kyiv()
+    answer.answered_at = clock.now_kyiv()
     answer.save()
 
     await query.message.reply_text(question_skipped_message)
@@ -205,7 +205,7 @@ async def handle_option_button(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     answer.answer = options[index]
-    answer.answered_at = now_kyiv()
+    answer.answered_at = clock.now_kyiv()
     answer.save()
 
     user = User.get_by_id(update.effective_user.id)
@@ -239,7 +239,7 @@ async def handle_answer_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         from cohort import send_closing_summary
 
         closing.answer = update.message.text
-        closing.answered_at = now_kyiv()
+        closing.answered_at = clock.now_kyiv()
         closing.save()
 
         await send_closing_summary(context.bot, user)
@@ -260,7 +260,7 @@ async def handle_answer_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     answer.answer = update.message.text
-    answer.answered_at = now_kyiv()
+    answer.answered_at = clock.now_kyiv()
     answer.save()
 
     if not await after_daily_answer(context.bot, user):
