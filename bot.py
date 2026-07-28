@@ -1,30 +1,32 @@
 import os
 
 from dotenv import load_dotenv
+
+load_dotenv()
+
 from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
 from telegram.ext import (
-    Application, )
-from telegram.ext import (
     CommandHandler,
     ContextTypes,
+    Application
 )
 
-from database import User, Status
-from database import initialize_database
+from database import User, Status, initialize_database
 from messages_texts import *
 from onboarding import onboarding_conv_handler
 
-load_dotenv()
 initialize_database()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    User.get_or_create(telegram_id=update.effective_user.id, status=Status.JUSTSTARTED,
-                       username=update.effective_user.username)
+    User.get_or_create(
+        telegram_id=update.effective_user.id,
+        defaults={"status": Status.ONBOARDING, "username": update.effective_user.username},
+    )
 
     keyboard = [
         [InlineKeyboardButton(start_message_button, callback_data="start:onboarding")]
@@ -48,6 +50,8 @@ def main():
 
     app.add_handler(onboarding_conv_handler)
     # app.add_handler(CallbackQueryHandler(button_handler))
+    # app.add_error_handler(error_handler)
+
     print("Bot started...")
     app.run_polling()
 

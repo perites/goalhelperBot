@@ -5,17 +5,86 @@ start_message = '''
 Це не про тиск і не про “треба”. Це про м’яке повернення до того, що для тебе важливо.
 '''
 
-start_message_button = '''
-🚀 Почати
-'''
+start_message_button = '''🚀 Почати'''
 
 onboarding_personal_data_message = '''
-Чи згодні ви на опрацювання особистихи данних ?
+Щоб працювати з твоїми відповідями, бот буде зберігати твій намір, відповіді, обрані емоції та короткі записи протягом участі у 30-денному циклі.
+Дані використовуються для твоєї особистої рефлексії та покращення продукту.
 '''
 
-onboarding_personal_data_message_yes = '''
-✅ Yes
+onboarding_personal_data_message_yes = '''✅ Погоджуюсь'''
+onboarding_personal_data_message_no = '''❌ Не погоджуюсь'''
+
+onboarding_personal_data_declined_message = '''
+Добре, розумію.
+Без згоди на обробку даних бот не може розпочати участь.
+Якщо передумаєш — просто напиши /start ще раз.
 '''
-onboarding_personal_data_message_no = '''
-❌ No
+
+onboarding_name_message = '''
+Як до тебе звертатися?
+'''
+
+onboarding_category_message = '''
+З чого починається твоє “Я хочу”?
+'''
+
+category_labels = [
+    "Почати",
+    "Завершити",
+    "Навчитися",
+    "Побудувати звичку",
+    "Отримати результат",
+    "Стати більш / більшою",
+    "Відпустити / перестати",
+    "Розібратися",
+    "Інше",
+]
+
+onboarding_intention_message = '''
+Сформулюй своє “Я хочу” одним реченням.
+Наприклад: “Я хочу почати регулярно писати в LinkedIn” або “Я хочу побудувати звичку щоденної рефлексії”.
+Ти вибрав: “Я хочу {intention_type}...“
+'''
+
+onboarding_time_slots_message = '''
+Коли тобі зручно отримувати повідомлення? Обери один або кілька варіантів.
+'''
+
+onboarding_time_slots_continue_button = '''Продовжити ➡️'''
+
+onboarding_time_slots_empty_warning = '''
+Обери хоча б один час.
+'''
+
+onboarding_confirm_template = '''
+Твій намір на ці 30 днів:
+“{intention}”
+
+Ім'я: {name}
+Категорія: {category}
+Час повідомлень: {times}
+
+Чи залишаємо так?
+'''
+
+onboarding_confirm_yes_button = '''✅ Так, залишаємо'''
+
+onboarding_confirm_restart_button = '''✏️ Хочу змінити'''
+
+onboarding_confirmed_message = '''
+Домовились.
+Твій 30-денний цикл починається.
+Я буду повертати тебе до твого наміру, ставити питання й допомагати помічати маленькі кроки.
+'''
+
+onboarding_ready_message = '''
+Почнемо з першого питання?
+'''
+
+onboarding_ready_button = '''Так, почати'''
+
+onboarding_first_question_placeholder = '''
+День 1 із 30.
+Це буде твоє перше питання дня 🙂
 '''

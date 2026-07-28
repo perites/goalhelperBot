@@ -1,3 +1,5 @@
+from datetime import datetime, time as dt_time
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram import Update
 from telegram.ext import (
@@ -8,141 +10,215 @@ from telegram.ext import (
     filters, CallbackQueryHandler,
 )
 
+from database import User, UserTime, Status
 from helpers import get_message
 from messages_texts import *
 
-PERSONAL_DATA_PROCESSING, NAME, AGE = range(3)
+CONSENT, NAME, CATEGORY, INTENTION, TIME_SLOTS, CONFIRM, READY = range(7)
+
+TIME_SLOTS_CHOICES = {
+    "morning": {"time": dt_time(9, 0), "label": "🌅 Зранку"},
+    "noon": {"time": dt_time(13, 0), "label": "🌤 Вдень"},
+    "evening": {"time": dt_time(19, 0), "label": "🌙 Увечері"},
+}
 
 
 async def begin_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    return await ask_personal_data_processing(update)
+    context.user_data.clear()
+    return await ask_consent(update)
 
 
-async def ask_personal_data_processing(update: Update):
+async def ask_consent(update: Update):
     message = get_message(update)
     keyboard = [
         [
-            InlineKeyboardButton(onboarding_personal_data_message_yes, callback_data="personal_data:yes"),
-            InlineKeyboardButton(onboarding_personal_data_message_no, callback_data="personal_data:no"),
+            InlineKeyboardButton(onboarding_personal_data_message_yes, callback_data="consent:yes"),
+            InlineKeyboardButton(onboarding_personal_data_message_no, callback_data="consent:no"),
         ]
     ]
 
-    await message.reply_text(onboarding_personal_data_message, reply_markup=InlineKeyboardMarkup(keyboard), )
+    await message.reply_text(onboarding_personal_data_message, reply_markup=InlineKeyboardMarkup(keyboard))
 
-    return PERSONAL_DATA_PROCESSING
+    return CONSENT
 
 
-async def handle_personal_data_processing(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_consent(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == "notifications_yes":
-        context.user_data["notifications"] = True
-    else:
-        context.user_data["notifications"] = False
+    if query.data == "consent:no":
+        User.update(consent=False, status=Status.DECLINED).where(
+            User.telegram_id == update.effective_user.id
+        ).execute()
+        await query.edit_message_text(onboarding_personal_data_declined_message)
+        return ConversationHandler.END
 
-    await query.edit_message_text(
-        f"Notifications: {context.user_data['notifications']}"
-    )
-    print(context.user_data)
-
-    await context.bot.send_message(text=
-                                   f"Thank you!\n\n"
-                                   f"Name: {context.user_data['name']}\n"
-                                   f"Age: {context.user_data['age']}"
-                                   f"Notifications: {context.user_data['notifications']}",
-                                   chat_id=update.effective_chat.id
-                                   )
-
-    return ConversationHandler.END
+    context.user_data["consent"] = True
+    return await ask_name(update)
 
 
-async def ask_name(update):
+async def ask_name(update: Update):
     message = get_message(update)
-    await message.reply_text("Great! Let's begin.\n\n"
-                             "What is your name?"
-                             )
+    await message.reply_text(onboarding_name_message)
 
     return NAME
 
 
-async def ask_age(update, context):
-    message = get_message(update)
-    await message.reply_text(
-        f"Nice to meet you, {context.user_data['name']}!\n"
-        "How old are you?"
-    )
-
-    return AGE
-
-
 async def handle_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["name"] = update.message.text
-    return await ask_age(update, context)
+    return await ask_category(update)
 
 
-async def handle_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    age = update.message.text
+async def ask_category(update: Update):
+    message = get_message(update)
+    keyboard = [
+        [InlineKeyboardButton(label, callback_data=f"category:{index}")]
+        for index, label in enumerate(category_labels)
+    ]
 
-    if not age.isdigit():
-        await update.message.reply_text("Please enter a valid age.")
-        return AGE
+    await message.reply_text(onboarding_category_message, reply_markup=InlineKeyboardMarkup(keyboard))
 
-    context.user_data["age"] = int(age)
-
-    return await ask_personal_data_processing(update)
-
-
-# async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     await update.message.reply_text(
-#         'Привіт. Я — “Я хочу бот”.'
-#         'Я допоможу тобі протягом 30 днів тримати фокус на твоєму намірі, помічати свій стан, фіксувати маленькі кроки й бачити власний рух.'
-#     )
-#
-#     keyboard = [
-#         [InlineKeyboardButton("🚀 Start", callback_data="start_form")]
-#     ]
-#
-#     reply_markup = InlineKeyboardMarkup(keyboard)
-#
-#     return NAME
+    return CATEGORY
 
 
-# async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     context.user_data["name"] = update.message.text
-#
-#     await update.message.reply_text(
-#         f"Nice to meet you, {context.user_data['name']}!\n"
-#         "How old are you?"
-#     )
-#
-#     return AGE
+async def handle_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    intention_type = int(query.data.split(":")[1])
+    context.user_data["intention_type"] = intention_type
+    return await ask_intention(update, intention_type)
 
 
-# async def get_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     age = update.message.text
-#
-#     if not age.isdigit():
-#         await update.message.reply_text("Please enter a valid age.")
-#         return AGE
-#
-#     context.user_data["age"] = int(age)
-#
-#     keyboard = [
-#         [
-#             InlineKeyboardButton("✅ Yes", callback_data="notifications_yes"),
-#             InlineKeyboardButton("❌ No", callback_data="notifications_no"),
-#         ]
-#     ]
-#
-#     await update.message.reply_text(
-#         "Would you like to receive notifications?",
-#         reply_markup=InlineKeyboardMarkup(keyboard),
-#     )
-#
-#     return NOTIFICATIONS
+async def ask_intention(update: Update, intention_type):
+    message = get_message(update)
+    await message.reply_text(onboarding_intention_message.format(intention_type=category_labels[intention_type]))
+
+    return INTENTION
+
+
+async def handle_intention(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["intention"] = update.message.text
+    return await ask_time_slots(update, context)
+
+
+def _build_time_slots_keyboard(selected: set):
+    buttons = [
+        [InlineKeyboardButton(
+            f"{'✅ ' if key in selected else ''}{slot['label']}",
+            callback_data=f"time_slot:{key}",
+        )]
+        for key, slot in TIME_SLOTS_CHOICES.items()
+    ]
+    buttons.append([InlineKeyboardButton(onboarding_time_slots_continue_button, callback_data="time_slot:continue")])
+
+    return InlineKeyboardMarkup(buttons)
+
+
+async def ask_time_slots(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = get_message(update)
+    selected = context.user_data.setdefault("time_slots", set())
+
+    await message.reply_text(onboarding_time_slots_message, reply_markup=_build_time_slots_keyboard(selected))
+
+    return TIME_SLOTS
+
+
+async def handle_time_slot_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    key = query.data.split(":")[1]
+    selected = context.user_data.setdefault("time_slots", set())
+    selected.symmetric_difference_update({key})
+
+    await query.edit_message_reply_markup(reply_markup=_build_time_slots_keyboard(selected))
+
+    return TIME_SLOTS
+
+
+async def handle_time_slots_continue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+
+    if not context.user_data.get("time_slots"):
+        await query.answer(onboarding_time_slots_empty_warning, show_alert=True)
+        return TIME_SLOTS
+
+    await query.answer()
+    return await ask_confirm(update, context)
+
+
+async def ask_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = get_message(update)
+    data = context.user_data
+
+    times_label = ", ".join(
+        TIME_SLOTS_CHOICES[key]["label"] for key in TIME_SLOTS_CHOICES if key in data["time_slots"]
+    )
+    text = onboarding_confirm_template.format(
+        intention=data["intention"],
+        name=data["name"],
+        category=category_labels[data["intention_type"]],
+        times=times_label,
+    )
+    keyboard = [
+        [
+            InlineKeyboardButton(onboarding_confirm_yes_button, callback_data="confirm:yes"),
+            InlineKeyboardButton(onboarding_confirm_restart_button, callback_data="confirm:restart"),
+        ]
+    ]
+
+    await message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+    return CONFIRM
+
+
+async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "confirm:restart":
+        context.user_data.clear()
+        return await ask_consent(update)
+
+    data = context.user_data
+    telegram_id = update.effective_user.id
+
+    User.update(
+        name=data["name"],
+        intention=data["intention"],
+        intention_type=data["intention_type"],
+        consent=True,
+        status=Status.ACTIVE,
+        date_started=datetime.now(),
+    ).where(User.telegram_id == telegram_id).execute()
+
+    UserTime.delete().where(UserTime.user == telegram_id).execute()
+    UserTime.bulk_create([
+        UserTime(user=telegram_id, time=TIME_SLOTS_CHOICES[key]["time"])
+        for key in data["time_slots"]
+    ])
+
+    await query.edit_message_text(onboarding_confirmed_message)
+    return await ask_ready(update)
+
+
+async def ask_ready(update: Update):
+    message = get_message(update)
+    keyboard = [[InlineKeyboardButton(onboarding_ready_button, callback_data="ready:yes")]]
+
+    await message.reply_text(onboarding_ready_message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+    return READY
+
+
+async def handle_ready(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text(onboarding_first_question_placeholder)
+
+    return ConversationHandler.END
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -155,17 +231,16 @@ onboarding_conv_handler = ConversationHandler(
         CallbackQueryHandler(begin_onboarding, pattern="^start:onboarding$")
     ],
     states={
-        PERSONAL_DATA_PROCESSING: [
-            CallbackQueryHandler(handle_personal_data_processing)
+        CONSENT: [CallbackQueryHandler(handle_consent, pattern="^consent:")],
+        NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_name)],
+        CATEGORY: [CallbackQueryHandler(handle_category, pattern="^category:")],
+        INTENTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_intention)],
+        TIME_SLOTS: [
+            CallbackQueryHandler(handle_time_slots_continue, pattern="^time_slot:continue$"),
+            CallbackQueryHandler(handle_time_slot_toggle, pattern="^time_slot:"),
         ],
-
-        NAME: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_name)
-        ],
-        AGE: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_age)
-        ],
-
+        CONFIRM: [CallbackQueryHandler(handle_confirm, pattern="^confirm:")],
+        READY: [CallbackQueryHandler(handle_ready, pattern="^ready:yes$")],
     },
     fallbacks=[CommandHandler("cancel", cancel)],
 )
