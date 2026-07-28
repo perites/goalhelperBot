@@ -23,6 +23,7 @@ from askquestions import (
     option_button_handler,
     answer_text_handler,
 )
+from cohort import EnrollmentState, enrollment_state, put_on_waitlist, seed_default_cohort
 from database import User, Status, initialize_database
 from menu import (
     main_menu_keyboard,
@@ -32,6 +33,8 @@ from menu import (
     edit_times_handler,
     edit_time_save_handler,
     edit_time_toggle_handler,
+    pause_handler,
+    pause_confirm_handler,
     finish_handler,
     finish_confirm_handler,
 )
@@ -40,6 +43,15 @@ from onboarding import onboarding_conv_handler
 
 initialize_database()
 seed_questions()
+seed_default_cohort()
+
+
+WAITLIST_MESSAGES = {
+    EnrollmentState.FULL: cohort_waitlist_full_message,
+    EnrollmentState.CLOSED: cohort_waitlist_closed_message,
+    EnrollmentState.NOT_OPEN_YET: cohort_waitlist_not_open_message,
+    EnrollmentState.NO_COHORT: cohort_waitlist_closed_message,
+}
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -50,8 +62,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Re-running onboarding would reset an active participant's cycle, so just
     # restore their menu instead.
-    if user.status == Status.ACTIVE:
+    if user.status in (Status.ACTIVE, Status.PAUSED):
         await update.message.reply_text(start_message, reply_markup=main_menu_keyboard())
+        return
+
+    if user.status == Status.STOPPED:
+        await update.message.reply_text(cohort_already_stopped_message)
+        return
+
+    if user.status == Status.FINISHED:
+        await update.message.reply_text(cohort_finished_message)
+        return
+
+    state = enrollment_state()
+    if state != EnrollmentState.OPEN:
+        put_on_waitlist(user)
+        await update.message.reply_text(WAITLIST_MESSAGES[state])
         return
 
     keyboard = [
@@ -84,7 +110,9 @@ def main():
     app.add_handler(contacts_handler)
     app.add_handler(stats_handler)
     app.add_handler(edit_times_handler)
+    app.add_handler(pause_handler)
     app.add_handler(finish_handler)
+    app.add_handler(pause_confirm_handler)
 
     # Save must be matched before the toggle pattern, which is a prefix of it.
     app.add_handler(edit_time_save_handler)

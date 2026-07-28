@@ -10,6 +10,7 @@ from telegram.ext import (
     filters, CallbackQueryHandler,
 )
 
+from cohort import join_cohort, put_on_waitlist
 from database import User, Status
 from helpers import get_message
 from menu import main_menu_keyboard
@@ -176,6 +177,14 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = context.user_data
     telegram_id = update.effective_user.id
+    user = User.get_by_id(telegram_id)
+
+    # Seats are only taken on completed onboarding, so the cohort can fill up
+    # while this user is still answering. Check again before claiming one.
+    if not join_cohort(user):
+        put_on_waitlist(user)
+        await query.message.reply_text(cohort_waitlist_full_message)
+        return ConversationHandler.END
 
     User.update(
         name=data["name"],

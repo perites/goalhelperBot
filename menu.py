@@ -1,5 +1,3 @@
-from collections import Counter
-
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -13,8 +11,10 @@ from telegram.ext import (
     filters, CallbackQueryHandler,
 )
 
-from database import User, Question, Answer, Status, QuestionType, CYCLE_LENGTH_DAYS
+from cohort import pause_user, resume_user
+from database import User, Answer, Status
 from messages_texts import *
+from stats import build_stats_text
 from time_slots import (
     build_keyboard,
     toggle,
@@ -25,7 +25,6 @@ from time_slots import (
     CONTINUE,
 )
 
-TOP_EMOTIONS = 3
 EDIT_TIME_PREFIX = "edit_time"
 
 
@@ -34,7 +33,7 @@ def main_menu_keyboard():
         [
             [menu_my_info_button, menu_stats_button],
             [menu_contacts_button, menu_edit_times_button],
-            [menu_finish_button],
+            [menu_pause_button, menu_finish_button],
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -43,35 +42,6 @@ def main_menu_keyboard():
 
 def _current_user(update: Update):
     return User.get_or_none(User.telegram_id == update.effective_user.id)
-
-
-def _answered_count(user, question_type=None):
-    query = (
-        Answer.select()
-        .join(Question)
-        .where((Answer.user == user) & Answer.answer.is_null(False))
-    )
-
-    if question_type is not None:
-        query = query.where(Question.type == question_type)
-
-    return query.count()
-
-
-def _top_emotions(user):
-    chosen = (
-        Answer.select(Answer.answer)
-        .join(Question)
-        .where(
-            (Answer.user == user)
-            & (Question.type == QuestionType.EMOTION)
-            & Answer.answer.is_null(False)
-        )
-    )
-
-    ranked = Counter(row.answer for row in chosen).most_common(TOP_EMOTIONS)
-
-    return ", ".join(emotion for emotion, _ in ranked)
 
 
 def _user_times(user):
@@ -92,7 +62,7 @@ async def handle_my_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             category=category_labels[user.intention_type],
             times=_user_times(user),
             day=user.cycle_day,
-            total=CYCLE_LENGTH_DAYS,
+            total=user.cycle_length,
         )
     )
 
@@ -106,17 +76,7 @@ async def handle_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user is None:
         return
 
-    await update.message.reply_text(
-        menu_stats_template.format(
-            day=user.cycle_day,
-            answered=_answered_count(user),
-            skipped=Answer.select().where((Answer.user == user) & (Answer.skipped == True)).count(),  # noqa: E712
-            emotions=_top_emotions(user) or menu_stats_no_emotions,
-            steps=_answered_count(user, QuestionType.STEP),
-            wins=_answered_count(user, QuestionType.WIN),
-            gratitude=_answered_count(user, QuestionType.GRATITUDE),
-        )
-    )
+    await update.message.reply_text(build_stats_text(user))
 
 
 async def handle_edit_times(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -166,6 +126,62 @@ async def handle_edit_time_save(update: Update, context: ContextTypes.DEFAULT_TY
     await query.message.reply_text(menu_edit_times_saved_template.format(times=format_slots(selected)))
 
 
+async def handle_pause(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = _current_user(update)
+    if user is None:
+        return
+
+    if user.is_paused:
+        keyboard = [[InlineKeyboardButton(menu_resume_button, callback_data="pause:resume")]]
+        await update.message.reply_text(
+            menu_already_paused_template.format(days_left=user.pause_days_left),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    keyboard = [
+        [
+            InlineKeyboardButton(menu_pause_confirm_yes_button, callback_data="pause:yes"),
+            InlineKeyboardButton(menu_pause_confirm_no_button, callback_data="pause:no"),
+        ]
+    ]
+
+    await update.message.reply_text(
+        menu_pause_confirm_message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def handle_pause_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_reply_markup(reply_markup=None)
+
+    user = _current_user(update)
+    if user is None:
+        return
+
+    if query.data == "pause:no":
+        await query.message.reply_text(menu_pause_cancelled_message)
+        return
+
+    if query.data == "pause:resume":
+        resume_user(user)
+        await query.message.reply_text(menu_resumed_message)
+        return
+
+    # Pausing shouldn't leave a question hanging open against the paused days.
+    Answer.update(skipped=True).where(
+        (Answer.user == user)
+        & Answer.answered_at.is_null(True)
+        & (Answer.skipped == False)  # noqa: E712 - peewee needs the comparison
+    ).execute()
+
+    pause_user(user)
+
+    await query.message.reply_text(menu_paused_message)
+
+
 async def handle_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [
@@ -213,6 +229,8 @@ my_info_handler = MessageHandler(filters.Text([menu_my_info_button]), handle_my_
 contacts_handler = MessageHandler(filters.Text([menu_contacts_button]), handle_contacts)
 stats_handler = MessageHandler(filters.Text([menu_stats_button]), handle_stats)
 edit_times_handler = MessageHandler(filters.Text([menu_edit_times_button]), handle_edit_times)
+pause_handler = MessageHandler(filters.Text([menu_pause_button]), handle_pause)
+pause_confirm_handler = CallbackQueryHandler(handle_pause_confirm, pattern="^pause:")
 finish_handler = MessageHandler(filters.Text([menu_finish_button]), handle_finish)
 
 edit_time_save_handler = CallbackQueryHandler(

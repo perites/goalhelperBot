@@ -16,6 +16,9 @@ from messages_texts import *
 ORDER_STEP = 10
 
 
+FINAL_ORDER_BASE = 10000
+
+
 def seed_questions():
     """Populate the question bank once, leaving sparse gaps in `order`
     so questions can be inserted later without renumbering."""
@@ -30,13 +33,29 @@ def seed_questions():
             order=position * ORDER_STEP,
         )
 
+    # Closing questions live in the same table so their answers export
+    # uniformly, but `is_final` keeps them out of the daily rotation.
+    for position, (text, question_type) in enumerate(final_questions, start=1):
+        Question.create(
+            text=text,
+            type=question_type,
+            options=None,
+            order=FINAL_ORDER_BASE + position * ORDER_STEP,
+            is_final=True,
+        )
+
+
+def daily_questions():
+    return Question.select().where(Question.is_final == False)  # noqa: E712
+
 
 def next_question_for(user):
     """The next question in `order`, wrapping to the first once the bank runs out."""
-    first_question = Question.select().order_by(Question.order).first()
+    first_question = daily_questions().order_by(Question.order).first()
     last_sent = (
         Answer.select()
-        .where(Answer.user == user)
+        .join(Question)
+        .where((Answer.user == user) & (Question.is_final == False))  # noqa: E712
         .order_by(Answer.sent_at.desc(), Answer.id.desc())
         .first()
     )
@@ -45,7 +64,7 @@ def next_question_for(user):
         return first_question
 
     following = (
-        Question.select()
+        daily_questions()
         .where(Question.order > last_sent.question.order)
         .order_by(Question.order)
         .first()
@@ -83,21 +102,10 @@ def _build_question_keyboard(question, answer):
     return InlineKeyboardMarkup(keyboard)
 
 
-async def send_question(bot, user):
-    """Close out the previous question, then send the next one. Returns the new Answer row."""
-    close_open_questions(user)
-
-    question = next_question_for(user)
-    if question is None:
-        return None
-
+async def deliver(bot, user, question, text):
+    """Create the pending Answer row and send it. Shared by the daily
+    rotation and the closing questions."""
     answer = Answer.create(user=user, question=question, sent_at=datetime.now())
-    text = question_message_template.format(
-        day=user.cycle_day,
-        total=CYCLE_LENGTH_DAYS,
-        intention=user.intention,
-        question=question.text,
-    )
 
     await bot.send_message(
         chat_id=user.telegram_id,
@@ -106,6 +114,51 @@ async def send_question(bot, user):
     )
 
     return answer
+
+
+async def send_question(bot, user):
+    """Close out the previous question, then send the next one. Returns the new Answer row."""
+    close_open_questions(user)
+
+    question = next_question_for(user)
+    if question is None:
+        return None
+
+    text = question_message_template.format(
+        day=user.cycle_day,
+        total=user.cycle_length,
+        intention=user.intention,
+        question=question.text,
+    )
+
+    return await deliver(bot, user, question, text)
+
+
+def next_final_question_for(user):
+    """Closing questions are asked once each, in order — no wrap-around."""
+    already_asked = (
+        Answer.select(Answer.question)
+        .join(Question)
+        .where((Answer.user == user) & (Question.is_final == True))  # noqa: E712
+    )
+
+    return (
+        Question.select()
+        .where((Question.is_final == True) & Question.id.not_in(already_asked))  # noqa: E712
+        .order_by(Question.order)
+        .first()
+    )
+
+
+async def send_final_question(bot, user):
+    """Next closing question, or None when they've all been asked."""
+    close_open_questions(user)
+
+    question = next_final_question_for(user)
+    if question is None:
+        return None
+
+    return await deliver(bot, user, question, question.text)
 
 
 def _open_answer(answer_id):
