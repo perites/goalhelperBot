@@ -29,6 +29,8 @@ from app.services.slots import (
 
 logger = get_logger(__name__)
 
+FREE_TEXT = filters.TEXT & ~filters.COMMAND & ~filters.Text(main_menu_buttons)
+
 CONSENT, NAME, CATEGORY, INTENTION, TIME_SLOTS, CONFIRM, READY = range(7)
 
 
@@ -255,9 +257,12 @@ onboarding_conv_handler = ConversationHandler(
     ],
     states={
         CONSENT: [CallbackQueryHandler(handle_consent, pattern="^consent:")],
-        NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_name)],
+        # Menu buttons are plain text, and a reply keyboard can still be on
+        # screen from an earlier run — excluding them stops "📊 Моя
+        # статистика" being saved as somebody's name.
+        NAME: [MessageHandler(FREE_TEXT, handle_name)],
         CATEGORY: [CallbackQueryHandler(handle_category, pattern="^category:")],
-        INTENTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_intention)],
+        INTENTION: [MessageHandler(FREE_TEXT, handle_intention)],
         TIME_SLOTS: [
             CallbackQueryHandler(handle_time_slots_continue, pattern=f"^{TIME_SLOT_PREFIX}:{CONTINUE_ACTION}$"),
             CallbackQueryHandler(handle_time_slot_toggle, pattern=f"^{TIME_SLOT_PREFIX}:"),
@@ -266,5 +271,11 @@ onboarding_conv_handler = ConversationHandler(
         READY: [CallbackQueryHandler(handle_ready, pattern="^ready:yes$")],
     },
     fallbacks=[CommandHandler("cancel", cancel)],
+
+    # Without this, tapping "Почати" a second time is silently dropped:
+    # entry points are only consulted when the user isn't already inside a
+    # conversation, so someone part-way through onboarding has no way back to
+    # the start and the button just appears dead.
+    allow_reentry=True,
 )
 

@@ -43,8 +43,31 @@ def main_menu_keyboard():
     )
 
 
-async def handle_my_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _require_participant(update):
+    """A reply keyboard lives in the Telegram client, not in our database, so
+    it can outlive the profile behind it — after an abandoned onboarding, or
+    a rebuilt database. Answer those taps politely and clear the stale
+    keyboard instead of indexing into a half-filled row.
+    """
     user = current_user(update)
+
+    if user is not None and user.intention_type is not None:
+        return user
+
+    logger.info(
+        "Menu tap from user=%s with no completed profile; clearing keyboard",
+        update.effective_user.id,
+    )
+    await update.message.reply_text(
+        menu_not_participant_message,
+        reply_markup=ReplyKeyboardRemove(),
+    )
+
+    return None
+
+
+async def handle_my_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _require_participant(update)
     if user is None:
         return
 
@@ -65,7 +88,7 @@ async def handle_contacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = current_user(update)
+    user = await _require_participant(update)
     if user is None:
         return
 
@@ -73,7 +96,7 @@ async def handle_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_edit_times(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = current_user(update)
+    user = await _require_participant(update)
     if user is None:
         return
 
@@ -122,7 +145,7 @@ async def handle_edit_time_save(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def handle_pause(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = current_user(update)
+    user = await _require_participant(update)
     if user is None:
         return
 
@@ -153,7 +176,7 @@ async def handle_pause_confirm(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.edit_message_reply_markup(reply_markup=None)
 
     user = current_user(update)
-    if user is None:
+    if user is None or user.intention_type is None:
         return
 
     if query.data == "pause:no":
@@ -171,6 +194,11 @@ async def handle_pause_confirm(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def handle_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Guarded because confirming sets STOPPED, and a STOPPED user can never
+    # join — a stale keyboard must not be able to lock someone out.
+    if await _require_participant(update) is None:
+        return
+
     keyboard = [
         [
             InlineKeyboardButton(menu_finish_confirm_yes_button, callback_data="finish:yes"),
@@ -194,7 +222,7 @@ async def handle_finish_confirm(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     user = current_user(update)
-    if user is None:
+    if user is None or user.intention_type is None:
         return
 
     # Close out anything still open so it isn't left dangling as unanswered.

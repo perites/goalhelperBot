@@ -8,7 +8,12 @@ from datetime import time
 
 # --- Storage ---------------------------------------------------------------
 
-DATABASE_NAME = "goalbot.db"
+# Where the database and logs live. Defaults to the working directory, which
+# is what you want when running locally or under systemd; containers set
+# DATA_DIR to a mounted volume so the data survives a rebuild.
+DATA_DIR = os.getenv("DATA_DIR", ".")
+
+DATABASE_NAME = os.path.join(DATA_DIR, "goalbot.db")
 
 # --- Time ------------------------------------------------------------------
 
@@ -60,7 +65,7 @@ KSENIA_TELEGRAM = "@kryskaks"
 
 # --- Logging ---------------------------------------------------------------
 
-LOG_DIR = "logs"
+LOG_DIR = os.path.join(DATA_DIR, "logs")
 LOG_FILE_NAME = "bot.log"
 
 # Everything at this level and above reaches the file and the console.

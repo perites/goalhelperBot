@@ -116,6 +116,12 @@ main_menu_buttons = [
     menu_finish_button,
 ]
 
+menu_not_participant_message = '''
+Здається, ти ще не почала / почав свій 30-денний цикл.
+
+Напиши /start, щоб приєднатися.
+'''
+
 menu_pause_confirm_message = '''
 Хочеш зробити паузу на 3 дні?
 
