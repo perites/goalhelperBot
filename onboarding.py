@@ -1,4 +1,4 @@
-from datetime import datetime, time as dt_time
+from datetime import datetime
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram import Update
@@ -10,17 +10,22 @@ from telegram.ext import (
     filters, CallbackQueryHandler,
 )
 
-from database import User, UserTime, Status
+from database import User, Status
 from helpers import get_message
+from menu import main_menu_keyboard
 from messages_texts import *
+from time_slots import (
+    build_keyboard,
+    toggle,
+    slot_key,
+    save_slots,
+    format_slots,
+    CONTINUE,
+)
 
 CONSENT, NAME, CATEGORY, INTENTION, TIME_SLOTS, CONFIRM, READY = range(7)
 
-TIME_SLOTS_CHOICES = {
-    "morning": {"time": dt_time(9, 0), "label": "🌅 Зранку"},
-    "noon": {"time": dt_time(13, 0), "label": "🌤 Вдень"},
-    "evening": {"time": dt_time(19, 0), "label": "🌙 Увечері"},
-}
+TIME_SLOT_PREFIX = "time_slot"
 
 
 async def begin_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -103,24 +108,14 @@ async def handle_intention(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await ask_time_slots(update, context)
 
 
-def _build_time_slots_keyboard(selected: set):
-    buttons = [
-        [InlineKeyboardButton(
-            f"{'✅ ' if key in selected else ''}{slot['label']}",
-            callback_data=f"time_slot:{key}",
-        )]
-        for key, slot in TIME_SLOTS_CHOICES.items()
-    ]
-    buttons.append([InlineKeyboardButton(onboarding_time_slots_continue_button, callback_data="time_slot:continue")])
-
-    return InlineKeyboardMarkup(buttons)
-
-
 async def ask_time_slots(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = get_message(update)
     selected = context.user_data.setdefault("time_slots", set())
 
-    await message.reply_text(onboarding_time_slots_message, reply_markup=_build_time_slots_keyboard(selected))
+    await message.reply_text(
+        onboarding_time_slots_message,
+        reply_markup=build_keyboard(selected, TIME_SLOT_PREFIX, onboarding_time_slots_continue_button),
+    )
 
     return TIME_SLOTS
 
@@ -129,11 +124,11 @@ async def handle_time_slot_toggle(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
 
-    key = query.data.split(":")[1]
-    selected = context.user_data.setdefault("time_slots", set())
-    selected.symmetric_difference_update({key})
+    selected = toggle(context.user_data.setdefault("time_slots", set()), slot_key(query.data))
 
-    await query.edit_message_reply_markup(reply_markup=_build_time_slots_keyboard(selected))
+    await query.edit_message_reply_markup(
+        reply_markup=build_keyboard(selected, TIME_SLOT_PREFIX, onboarding_time_slots_continue_button),
+    )
 
     return TIME_SLOTS
 
@@ -153,14 +148,11 @@ async def ask_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = get_message(update)
     data = context.user_data
 
-    times_label = ", ".join(
-        TIME_SLOTS_CHOICES[key]["label"] for key in TIME_SLOTS_CHOICES if key in data["time_slots"]
-    )
     text = onboarding_confirm_template.format(
         intention=data["intention"],
         name=data["name"],
         category=category_labels[data["intention_type"]],
-        times=times_label,
+        times=format_slots(data["time_slots"]),
     )
     keyboard = [
         [
@@ -194,11 +186,7 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         date_started=datetime.now(),
     ).where(User.telegram_id == telegram_id).execute()
 
-    UserTime.delete().where(UserTime.user == telegram_id).execute()
-    UserTime.bulk_create([
-        UserTime(user=telegram_id, time=TIME_SLOTS_CHOICES[key]["time"])
-        for key in data["time_slots"]
-    ])
+    save_slots(telegram_id, data["time_slots"])
 
     await query.edit_message_text(onboarding_confirmed_message)
     return await ask_ready(update)
@@ -216,7 +204,13 @@ async def ask_ready(update: Update):
 async def handle_ready(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text(onboarding_first_question_placeholder)
+    await query.edit_message_reply_markup(reply_markup=None)
+
+    # A reply keyboard can't ride along on an edit, so the menu needs its own message.
+    await query.message.reply_text(
+        onboarding_first_question_placeholder,
+        reply_markup=main_menu_keyboard(),
+    )
 
     return ConversationHandler.END
 
@@ -236,8 +230,8 @@ onboarding_conv_handler = ConversationHandler(
         CATEGORY: [CallbackQueryHandler(handle_category, pattern="^category:")],
         INTENTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_intention)],
         TIME_SLOTS: [
-            CallbackQueryHandler(handle_time_slots_continue, pattern="^time_slot:continue$"),
-            CallbackQueryHandler(handle_time_slot_toggle, pattern="^time_slot:"),
+            CallbackQueryHandler(handle_time_slots_continue, pattern=f"^{TIME_SLOT_PREFIX}:{CONTINUE}$"),
+            CallbackQueryHandler(handle_time_slot_toggle, pattern=f"^{TIME_SLOT_PREFIX}:"),
         ],
         CONFIRM: [CallbackQueryHandler(handle_confirm, pattern="^confirm:")],
         READY: [CallbackQueryHandler(handle_ready, pattern="^ready:yes$")],

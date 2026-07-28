@@ -10,10 +10,9 @@ from telegram.ext import (
     filters, CallbackQueryHandler,
 )
 
-from database import User, Question, Answer, Status
+from database import User, Question, Answer, Status, CYCLE_LENGTH_DAYS
 from messages_texts import *
 
-CYCLE_LENGTH_DAYS = 30
 ORDER_STEP = 10
 
 
@@ -30,13 +29,6 @@ def seed_questions():
             options=json.dumps(options, ensure_ascii=False) if options else None,
             order=position * ORDER_STEP,
         )
-
-
-def cycle_day(user) -> int:
-    if user.date_started is None:
-        return 1
-
-    return (datetime.now().date() - user.date_started.date()).days + 1
 
 
 def next_question_for(user):
@@ -101,7 +93,7 @@ async def send_question(bot, user):
 
     answer = Answer.create(user=user, question=question, sent_at=datetime.now())
     text = question_message_template.format(
-        day=cycle_day(user),
+        day=user.cycle_day,
         total=CYCLE_LENGTH_DAYS,
         intention=user.intention,
         question=question.text,
@@ -244,4 +236,8 @@ ask_command_handler = CommandHandler("ask", ask_command)
 answer_button_handler = CallbackQueryHandler(handle_answer_button, pattern="^answer:")
 skip_button_handler = CallbackQueryHandler(handle_skip_button, pattern="^skip:")
 option_button_handler = CallbackQueryHandler(handle_option_button, pattern="^option:")
-answer_text_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, handle_answer_text)
+# Menu buttons arrive as plain text, so they must be excluded or they'd be saved as answers.
+answer_text_handler = MessageHandler(
+    filters.TEXT & ~filters.COMMAND & ~filters.Text(main_menu_buttons),
+    handle_answer_text,
+)

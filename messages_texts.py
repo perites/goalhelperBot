@@ -91,6 +91,82 @@ onboarding_first_question_placeholder = '''
 Це буде твоє перше питання дня 🙂
 '''
 
+menu_my_info_button = '''📝 Моя інформація'''
+menu_contacts_button = '''💬 Контакти Ксенії'''
+menu_stats_button = '''📊 Моя статистика'''
+menu_edit_times_button = '''⏰ Змінити час повідомлень'''
+menu_finish_button = '''🚪 Завершити участь'''
+
+main_menu_buttons = [
+    menu_my_info_button,
+    menu_contacts_button,
+    menu_stats_button,
+    menu_edit_times_button,
+    menu_finish_button,
+]
+
+menu_edit_times_message = '''
+Коли тобі зручно отримувати повідомлення? Обери один або кілька варіантів.
+'''
+
+menu_edit_times_save_button = '''Зберегти ✅'''
+
+menu_edit_times_saved_template = '''
+Готово. Тепер я писатиму тобі: {times}
+'''
+
+menu_my_info_template = '''
+Твій намір на ці 30 днів:
+“{intention}”
+
+Ім'я: {name}
+Категорія: {category}
+Час повідомлень: {times}
+День циклу: {day} із {total}
+'''
+
+menu_contacts_message = '''
+Зв'язатися зі мною:
+
+Telegram: @kryskaks
+
+Напиши, якщо виникають питання, хочеться щось прояснити або просто поділитися тим, що відбувається.
+Там само можна домовитися про зустріч — ознайомчу або підсумкову рефлексійну, коли завершиш свій цикл.
+'''
+
+menu_stats_template = '''
+Твоя статистика за {day} днів:
+
+Відповідей: {answered}
+Пропущено: {skipped}
+Найчастіші емоції: {emotions}
+Зафіксовано кроків: {steps}
+Маленьких перемог: {wins}
+Моментів вдячності: {gratitude}
+'''
+
+menu_stats_no_emotions = '''поки що немає'''
+
+menu_finish_confirm_message = '''
+Хочеш завершити участь у 30-денному циклі?
+
+Твої відповіді залишаться збереженими. Питання більше не приходитимуть.
+'''
+
+menu_finish_confirm_yes_button = '''Так, завершити'''
+menu_finish_confirm_no_button = '''Ні, продовжую'''
+
+menu_finish_confirmed_message = '''
+Добре. Твоя участь завершена.
+
+Дякую за час, який ти приділила / приділив собі в ці дні.
+Якщо захочеш повернутися — просто напиши /start.
+'''
+
+menu_finish_cancelled_message = '''
+Добре, продовжуємо.
+'''
+
 question_message_template = '''
 День {day} із {total}.
 Твій намір: “{intention}”

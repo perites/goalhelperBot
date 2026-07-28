@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from enum import IntEnum
 
 from peewee import (
@@ -7,6 +8,8 @@ from peewee import (
 )
 
 db = SqliteDatabase("goalbot.db")
+
+CYCLE_LENGTH_DAYS = 30
 
 
 class Status(IntEnum):
@@ -57,6 +60,13 @@ class User(BaseModel):
 
     date_started = DateTimeField(null=True)
     created_at = DateTimeField(constraints=[SQL("DEFAULT CURRENT_TIMESTAMP")])
+
+    @property
+    def cycle_day(self) -> int:
+        if self.date_started is None:
+            return 1
+
+        return (datetime.now().date() - self.date_started.date()).days + 1
 
 
 class UserTime(BaseModel):
