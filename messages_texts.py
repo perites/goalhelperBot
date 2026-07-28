@@ -240,13 +240,33 @@ cohort_finished_message = '''
 Дякую, що була / був у цьому процесі.
 '''
 
-cycle_final_message = '''
+cycle_final_intro = '''
 Це {total}-й день твого циклу з “Я хочу ботом”.
 
 Запрошую тебе подивитися на цей період як на дослідження: що змінилося, що стало видимим, що хочеться забрати з собою далі.
+
+Ось кілька останніх питань. Можеш відповісти на них одним повідомленням — так, як тобі зручно, і тоді, коли буде час.
 '''
 
+# ТЗ §15's five closing questions — seed data for the FinalQuestion table.
+final_questions = [
+    "Що ти краще зрозуміла / зрозумів про свій намір?",
+    "Що тобі вдалося зробити за ці 30 днів?",
+    "Які емоції найчастіше супроводжували твій рух?",
+    "Який маленький крок мав найбільше значення?",
+    "Що ти хочеш продовжити після завершення цього циклу?",
+]
+
+
+def final_questions_block(total, questions):
+    numbered = "\n".join(f"{i}. {text}" for i, text in enumerate(questions, start=1))
+
+    return f"{cycle_final_intro.format(total=total).strip()}\n\n{numbered}"
+
+
 cycle_final_summary_intro = '''
+Дякую за твої відповіді.
+
 Ось як виглядав твій шлях за ці {total} днів:
 '''
 
@@ -256,16 +276,9 @@ cycle_final_invite_message = '''
 На зустрічі ми подивимось на твій досвід, твої відповіді, кроки, емоції й те, що стало видимим за ці дні.
 
 Написати мені: @kryskaks
-'''
 
-# The five closing questions from ТЗ §15. Kept out of the daily rotation by is_final.
-final_questions = [
-    ("Що ти краще зрозуміла / зрозумів про свій намір?", QuestionType.FOCUS),
-    ("Що тобі вдалося зробити за ці 30 днів?", QuestionType.STEP),
-    ("Які емоції найчастіше супроводжували твій рух?", QuestionType.EMOTION),
-    ("Який маленький крок мав найбільше значення?", QuestionType.STEP),
-    ("Що ти хочеш продовжити після завершення цього циклу?", QuestionType.FOCUS),
-]
+Дякую, що була / був у цьому процесі.
+'''
 
 menu_finish_cancelled_message = '''
 Добре, продовжуємо.

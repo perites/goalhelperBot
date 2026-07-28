@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from clock import now_kyiv
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram import Update
@@ -10,52 +10,35 @@ from telegram.ext import (
     filters, CallbackQueryHandler,
 )
 
-from database import User, Question, Answer, Status, CYCLE_LENGTH_DAYS
+from database import User, Question, Answer, FinalQuestion, FinalAnswer, Status
 from messages_texts import *
 
 ORDER_STEP = 10
 
 
-FINAL_ORDER_BASE = 10000
-
-
 def seed_questions():
-    """Populate the question bank once, leaving sparse gaps in `order`
+    """Populate the question banks once, leaving sparse gaps in `order`
     so questions can be inserted later without renumbering."""
-    if Question.select().exists():
-        return
+    if not Question.select().exists():
+        for position, (text, question_type, options) in enumerate(sample_questions, start=1):
+            Question.create(
+                text=text,
+                type=question_type,
+                options=json.dumps(options, ensure_ascii=False) if options else None,
+                order=position * ORDER_STEP,
+            )
 
-    for position, (text, question_type, options) in enumerate(sample_questions, start=1):
-        Question.create(
-            text=text,
-            type=question_type,
-            options=json.dumps(options, ensure_ascii=False) if options else None,
-            order=position * ORDER_STEP,
-        )
-
-    # Closing questions live in the same table so their answers export
-    # uniformly, but `is_final` keeps them out of the daily rotation.
-    for position, (text, question_type) in enumerate(final_questions, start=1):
-        Question.create(
-            text=text,
-            type=question_type,
-            options=None,
-            order=FINAL_ORDER_BASE + position * ORDER_STEP,
-            is_final=True,
-        )
-
-
-def daily_questions():
-    return Question.select().where(Question.is_final == False)  # noqa: E712
+    if not FinalQuestion.select().exists():
+        for position, text in enumerate(final_questions, start=1):
+            FinalQuestion.create(text=text, order=position * ORDER_STEP)
 
 
 def next_question_for(user):
     """The next question in `order`, wrapping to the first once the bank runs out."""
-    first_question = daily_questions().order_by(Question.order).first()
+    first_question = Question.select().order_by(Question.order).first()
     last_sent = (
         Answer.select()
-        .join(Question)
-        .where((Answer.user == user) & (Question.is_final == False))  # noqa: E712
+        .where(Answer.user == user)
         .order_by(Answer.sent_at.desc(), Answer.id.desc())
         .first()
     )
@@ -64,7 +47,7 @@ def next_question_for(user):
         return first_question
 
     following = (
-        daily_questions()
+        Question.select()
         .where(Question.order > last_sent.question.order)
         .order_by(Question.order)
         .first()
@@ -103,9 +86,8 @@ def _build_question_keyboard(question, answer):
 
 
 async def deliver(bot, user, question, text):
-    """Create the pending Answer row and send it. Shared by the daily
-    rotation and the closing questions."""
-    answer = Answer.create(user=user, question=question, sent_at=datetime.now())
+    """Create the pending Answer row and send it."""
+    answer = Answer.create(user=user, question=question, sent_at=now_kyiv())
 
     await bot.send_message(
         chat_id=user.telegram_id,
@@ -134,31 +116,35 @@ async def send_question(bot, user):
     return await deliver(bot, user, question, text)
 
 
-def next_final_question_for(user):
-    """Closing questions are asked once each, in order — no wrap-around."""
-    already_asked = (
-        Answer.select(Answer.question)
-        .join(Question)
-        .where((Answer.user == user) & (Question.is_final == True))  # noqa: E712
-    )
+def has_received_closing_block(user):
+    return FinalAnswer.select().where(FinalAnswer.user == user).exists()
 
+
+def open_final_answer(user):
     return (
-        Question.select()
-        .where((Question.is_final == True) & Question.id.not_in(already_asked))  # noqa: E712
-        .order_by(Question.order)
+        FinalAnswer.select()
+        .where((FinalAnswer.user == user) & FinalAnswer.answered_at.is_null(True))
         .first()
     )
 
 
-async def send_final_question(bot, user):
-    """Next closing question, or None when they've all been asked."""
+async def send_closing_block(bot, user):
+    """The five closing questions as one message. No buttons — it stays open
+    indefinitely until the user replies."""
     close_open_questions(user)
 
-    question = next_final_question_for(user)
-    if question is None:
+    questions = [q.text for q in FinalQuestion.select().order_by(FinalQuestion.order)]
+    if not questions:
         return None
 
-    return await deliver(bot, user, question, question.text)
+    final_answer = FinalAnswer.create(user=user, sent_at=now_kyiv())
+
+    await bot.send_message(
+        chat_id=user.telegram_id,
+        text=final_questions_block(user.cycle_length, questions),
+    )
+
+    return final_answer
 
 
 def _open_answer(answer_id):
@@ -195,7 +181,7 @@ async def handle_skip_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     answer.skipped = True
-    answer.answered_at = datetime.now()
+    answer.answered_at = now_kyiv()
     answer.save()
 
     await query.message.reply_text(question_skipped_message)
@@ -220,15 +206,44 @@ async def handle_option_button(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     answer.answer = options[index]
-    answer.answered_at = datetime.now()
+    answer.answered_at = now_kyiv()
     answer.save()
 
-    await query.message.reply_text(question_saved_message)
+    user = User.get_by_id(update.effective_user.id)
+    if not await after_daily_answer(context.bot, user):
+        await query.message.reply_text(question_saved_message)
+
+
+async def after_daily_answer(bot, user):
+    """Answering on day 30 hands straight off to the closing block.
+    Returns True if an end-of-cycle message was sent."""
+    from cohort import complete_cycle, reached_final_day
+
+    if not reached_final_day(user):
+        return False
+
+    await complete_cycle(bot, user)
+
+    return True
 
 
 async def handle_answer_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = User.get_or_none(User.telegram_id == update.effective_user.id)
-    if user is None or user.status != Status.ACTIVE:
+
+    # FINISHED is allowed through: the closing block stays open for them.
+    if user is None or user.status not in (Status.ACTIVE, Status.FINISHED):
+        return
+
+    # The closing block is the terminal state, so it takes priority.
+    closing = open_final_answer(user)
+    if closing is not None:
+        from cohort import send_closing_summary
+
+        closing.answer = update.message.text
+        closing.answered_at = now_kyiv()
+        closing.save()
+
+        await send_closing_summary(context.bot, user)
         return
 
     answer = (
@@ -246,10 +261,11 @@ async def handle_answer_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     answer.answer = update.message.text
-    answer.answered_at = datetime.now()
+    answer.answered_at = now_kyiv()
     answer.save()
 
-    await update.message.reply_text(question_saved_message)
+    if not await after_daily_answer(context.bot, user):
+        await update.message.reply_text(question_saved_message)
 
 
 async def ask_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -3,15 +3,15 @@
 The completion helpers here are deliberately not wired to any handler yet —
 they'll be driven by the scheduler.
 """
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 from enum import IntEnum
 
+from clock import now_kyiv, today_kyiv
 from database import (
     User, Cohort, Status, CohortStatus,
     DEFAULT_MAX_PEOPLE, DEFAULT_ENROLLMENT_WINDOW_DAYS, PAUSE_DURATION_DAYS,
 )
 from messages_texts import (
-    cycle_final_message,
     cycle_final_summary_intro,
     cycle_final_invite_message,
 )
@@ -34,7 +34,7 @@ def seed_default_cohort():
     if Cohort.select().exists():
         return Cohort.select().first()
 
-    today = date.today()
+    today = today_kyiv()
 
     return Cohort.create(
         enrollment_opens=today,
@@ -71,7 +71,7 @@ def enrollment_state(cohort=None):
     if cohort is None or cohort.status == CohortStatus.ENDED:
         return EnrollmentState.NO_COHORT
 
-    today = date.today()
+    today = today_kyiv()
 
     if today < cohort.enrollment_opens:
         return EnrollmentState.NOT_OPEN_YET
@@ -112,7 +112,7 @@ def put_on_waitlist(user):
 
 def pause_user(user):
     user.status = Status.PAUSED
-    user.paused_at = datetime.now()
+    user.paused_at = now_kyiv()
     user.save()
 
 
@@ -129,7 +129,7 @@ def resume_user(user):
 
 def users_with_expired_pause():
     """Paused users whose 3 days are up. For the scheduler to normalise."""
-    cutoff = datetime.now() - timedelta(days=PAUSE_DURATION_DAYS)
+    cutoff = now_kyiv() - timedelta(days=PAUSE_DURATION_DAYS)
 
     return User.select().where(
         (User.status == Status.PAUSED)
@@ -141,11 +141,17 @@ def users_with_expired_pause():
 # --- End of cycle --------------------------------------------------------
 
 def users_due_for_completion():
-    """Active users who have passed their personal day 30. Paused users are
-    excluded because their finish line moves with the pause."""
+    """Active users past their personal day 30 who never answered on day 30,
+    so the answer-triggered path didn't fire. Paused users are excluded
+    because their finish line moves with the pause."""
+    from askquestions import has_received_closing_block
+
     candidates = User.select().where(User.status == Status.ACTIVE)
 
-    return [user for user in candidates if user.is_cycle_complete]
+    return [
+        user for user in candidates
+        if user.is_cycle_complete and not has_received_closing_block(user)
+    ]
 
 
 def mark_finished(user):
@@ -153,33 +159,30 @@ def mark_finished(user):
     user.save()
 
 
+def reached_final_day(user):
+    return user.date_started is not None and user.cycle_day >= user.cycle_length
+
+
 async def complete_cycle(bot, user):
-    """Day 30 reached: flip the status, send the closing message, and open the
-    closing questions (ТЗ §15). Not called anywhere yet — the scheduler will."""
-    from askquestions import send_final_question
+    """Day 30 done: mark finished and send the closing block.
+
+    Status flips to FINISHED straight away so the scheduler stops sending
+    daily questions while we wait for the closing answer.
+    """
+    from askquestions import has_received_closing_block, send_closing_block
+
+    if has_received_closing_block(user):
+        return None
 
     mark_finished(user)
 
-    await bot.send_message(
-        chat_id=user.telegram_id,
-        text=cycle_final_message.format(total=user.cycle_length),
-    )
-
-    return await send_final_question(bot, user)
+    return await send_closing_block(bot, user)
 
 
-async def advance_final_questions(bot, user):
-    """Send the next closing question, or the summary once they're done.
-
-    Hook this into the answer handler when the answered question is_final,
-    so answering one closing question triggers the next.
-    """
-    from askquestions import send_final_question
+async def send_closing_summary(bot, user):
+    """Called once the closing block is answered: summary, then thanks and
+    the invitation to book a session (ТЗ §15–16)."""
     from stats import build_stats_text
-
-    answer = await send_final_question(bot, user)
-    if answer is not None:
-        return answer
 
     await bot.send_message(
         chat_id=user.telegram_id,
@@ -187,8 +190,6 @@ async def advance_final_questions(bot, user):
     )
     await bot.send_message(chat_id=user.telegram_id, text=build_stats_text(user))
     await bot.send_message(chat_id=user.telegram_id, text=cycle_final_invite_message)
-
-    return None
 
 
 def cohort_is_complete(cohort):

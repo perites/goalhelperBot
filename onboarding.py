@@ -1,4 +1,4 @@
-from datetime import datetime
+from clock import now_kyiv
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram import Update
@@ -192,7 +192,7 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         intention_type=data["intention_type"],
         consent=True,
         status=Status.ACTIVE,
-        date_started=datetime.now(),
+        date_started=now_kyiv(),
     ).where(User.telegram_id == telegram_id).execute()
 
     save_slots(telegram_id, data["time_slots"])

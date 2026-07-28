@@ -40,6 +40,7 @@ from menu import (
 )
 from messages_texts import *
 from onboarding import onboarding_conv_handler
+from scheduler import schedule
 
 initialize_database()
 seed_questions()
@@ -123,6 +124,8 @@ def main():
     app.add_handler(skip_button_handler)
     app.add_handler(option_button_handler)
     app.add_handler(answer_text_handler)
+
+    schedule(app)
     # app.add_handler(CallbackQueryHandler(button_handler))
     # app.add_error_handler(error_handler)
 

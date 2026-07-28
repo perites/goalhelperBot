@@ -1,11 +1,13 @@
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
 from enum import IntEnum
 
 from peewee import (
     SqliteDatabase, Model, IntegerField, CharField, TextField,
     BooleanField, SQL, DateField, DateTimeField, ForeignKeyField, TimeField,
 )
+
+from clock import now_kyiv
 
 db = SqliteDatabase("goalbot.db")
 
@@ -94,7 +96,7 @@ class User(BaseModel):
         if self.paused_at is None:
             return 0
 
-        elapsed = (datetime.now().date() - self.paused_at.date()).days
+        elapsed = (now_kyiv().date() - self.paused_at.date()).days
 
         return min(elapsed, PAUSE_DURATION_DAYS)
 
@@ -120,7 +122,7 @@ class User(BaseModel):
         if self.date_started is None:
             return 1
 
-        elapsed = (datetime.now().date() - self.date_started.date()).days
+        elapsed = (now_kyiv().date() - self.date_started.date()).days
 
         return elapsed - self.total_paused_days + 1
 
@@ -142,11 +144,12 @@ class UserTime(BaseModel):
 
 
 class Question(BaseModel):
+    """Daily rotation questions only. The closing questions live in
+    FinalQuestion so this table needs no filtering on every lookup."""
     text = TextField()
     type = IntegerField()
     options = TextField(null=True)
     order = IntegerField(unique=True)
-    is_final = BooleanField(default=False)
 
     @property
     def option_list(self):
@@ -165,6 +168,24 @@ class Answer(BaseModel):
     skipped = BooleanField(default=False)
 
 
+class FinalQuestion(BaseModel):
+    """ТЗ §15's closing questions. Sent as one block and answered in one
+    message, so there's no per-question answer row."""
+    text = TextField()
+    order = IntegerField(unique=True)
+
+
+class FinalAnswer(BaseModel):
+    """One row per user: their single reply to the whole closing block."""
+    user = ForeignKeyField(User, backref="final_answers")
+    sent_at = DateTimeField()
+    answered_at = DateTimeField(null=True)
+    answer = TextField(null=True)
+
+
 def initialize_database():
     db.connect()
-    db.create_tables([Cohort, User, UserTime, Question, Answer], safe=True)
+    db.create_tables(
+        [Cohort, User, UserTime, Question, Answer, FinalQuestion, FinalAnswer],
+        safe=True,
+    )
