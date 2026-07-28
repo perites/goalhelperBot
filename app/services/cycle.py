@@ -1,0 +1,100 @@
+"""A participant's personal 30 days: pausing, and reaching the end.
+
+Splitting this from cohort.py lets it depend on the questions service without
+a cycle, which is what the function-level imports used to work around.
+"""
+from app import clock
+from app.enums import Status
+from app.models import User
+from app.services.questions import (
+    close_open_answers,
+    has_received_closing_block,
+    send_closing_block,
+)
+from app.services.stats import build_stats_text
+from app.texts import cycle_final_invite_message, cycle_final_summary_intro
+
+
+# --- Pausing ---------------------------------------------------------------
+
+def pause_user(user):
+    # A pause shouldn't leave a question hanging open against the paused days.
+    close_open_answers(user)
+
+    user.status = Status.PAUSED
+    user.paused_at = clock.now_kyiv()
+    user.save()
+
+
+def resume_user(user):
+    """Bank the days spent paused, then put the user back into the cycle.
+    Safe to call on an expired pause — current_pause_days is already capped."""
+    if user.paused_at is not None:
+        user.paused_days += user.current_pause_days
+        user.paused_at = None
+
+    user.status = Status.ACTIVE
+    user.save()
+
+
+def users_with_expired_pause():
+    """Paused users whose pause is up, for the scheduler to normalise.
+
+    Filtered through `is_paused` rather than a SQL datetime comparison so this
+    can't disagree with the property: that one counts calendar days, and a
+    cutoff of `now - 3 days` would hold a user in PAUSED for up to a day after
+    their pause had already stopped counting.
+    """
+    candidates = User.select().where(
+        (User.status == Status.PAUSED) & User.paused_at.is_null(False)
+    )
+
+    return [user for user in candidates if not user.is_paused]
+
+
+# --- End of cycle ----------------------------------------------------------
+
+def reached_final_day(user):
+    return user.date_started is not None and user.cycle_day >= user.cycle_length
+
+
+def finish_user(user):
+    user.status = Status.FINISHED
+    user.save()
+
+
+def users_due_for_completion():
+    """Active users past their personal last day who never answered on it, so
+    the answer-triggered handoff didn't fire. Paused users are excluded
+    because their finish line moves with the pause."""
+    candidates = User.select().where(User.status == Status.ACTIVE)
+
+    return [
+        user for user in candidates
+        if user.is_cycle_complete and not has_received_closing_block(user)
+    ]
+
+
+async def complete_cycle(bot, user):
+    """Last day done: mark finished and send the closing block.
+
+    Status flips to FINISHED straight away so the scheduler stops sending
+    daily questions while we wait for the closing answer.
+    """
+    if has_received_closing_block(user):
+        return None
+
+    finish_user(user)
+
+    return await send_closing_block(bot, user)
+
+
+async def send_closing_summary(bot, user):
+    """Called once the closing block is answered: summary, then thanks and
+    the invitation to book a session (ТЗ §15–16)."""
+    await bot.send_message(
+        chat_id=user.telegram_id,
+        text=cycle_final_summary_intro.format(total=user.cycle_length),
+    )
+    await bot.send_message(chat_id=user.telegram_id, text=build_stats_text(user))
+    await bot.send_message(chat_id=user.telegram_id, text=cycle_final_invite_message)

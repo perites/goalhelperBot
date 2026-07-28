@@ -1,14 +1,14 @@
 import json
 from datetime import timedelta
-from enum import IntEnum
 
 from peewee import (
     SqliteDatabase, Model, IntegerField, CharField, TextField,
     BooleanField, SQL, DateField, DateTimeField, ForeignKeyField, TimeField,
 )
 
-import clock
-from config import (
+from app import clock
+from app.enums import CohortStatus
+from app.config import (
     DATABASE_NAME,
     CYCLE_LENGTH_DAYS,
     PAUSE_DURATION_DAYS,
@@ -16,45 +16,6 @@ from config import (
 )
 
 db = SqliteDatabase(DATABASE_NAME)
-
-
-class Status(IntEnum):
-    ONBOARDING = 0
-    ACTIVE = 1
-    PAUSED = 2
-    FINISHED = 3
-    STOPPED = 4
-    WAITLIST = 5
-    DECLINED = 6
-
-
-class IntentionCategory(IntEnum):
-    START = 0
-    FINISH = 1
-    LEARN = 2
-    BUILD_HABIT = 3
-    GET_RESULT = 4
-    BECOME_MORE = 5
-    LET_GO = 6
-    FIGURE_OUT = 7
-    OTHER = 8
-
-
-class QuestionType(IntEnum):
-    EMOTION = 0
-    STEP = 1
-    SUPPORT = 2
-    GRATITUDE = 3
-    OBSTACLE = 4
-    WIN = 5
-    FOCUS = 6
-
-
-class CohortStatus(IntEnum):
-    PLANNED = 0
-    ENROLLING = 1
-    RUNNING = 2
-    ENDED = 3
 
 
 class BaseModel(Model):
@@ -167,6 +128,15 @@ class Answer(BaseModel):
     answered_at = DateTimeField(null=True)
     answer = TextField(null=True)
     skipped = BooleanField(default=False)
+
+    @classmethod
+    def open_for(cls, user):
+        """Questions sent to this user that are still awaiting a reply."""
+        return cls.select().where(
+            (cls.user == user)
+            & cls.answered_at.is_null(True)
+            & (cls.skipped == False)  # noqa: E712 - peewee needs the comparison
+        )
 
 
 class FinalQuestion(BaseModel):

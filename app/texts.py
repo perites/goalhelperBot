@@ -1,5 +1,5 @@
-from config import KSENIA_TELEGRAM
-from database import QuestionType
+from app.config import KSENIA_TELEGRAM
+from app.enums import QuestionType
 
 start_message = '''
 Привіт. Я — “Я хочу бот”.
@@ -10,15 +10,15 @@ start_message = '''
 
 start_message_button = '''🚀 Почати'''
 
-onboarding_personal_data_message = '''
+consent_message = '''
 Щоб працювати з твоїми відповідями, бот буде зберігати твій намір, відповіді, обрані емоції та короткі записи протягом участі у 30-денному циклі.
 Дані використовуються для твоєї особистої рефлексії та покращення продукту.
 '''
 
-onboarding_personal_data_message_yes = '''✅ Погоджуюсь'''
-onboarding_personal_data_message_no = '''❌ Не погоджуюсь'''
+consent_yes_button = '''✅ Погоджуюсь'''
+consent_no_button = '''❌ Не погоджуюсь'''
 
-onboarding_personal_data_declined_message = '''
+consent_declined_message = '''
 Добре, розумію.
 Без згоди на обробку даних бот не може розпочати участь.
 Якщо передумаєш — просто напиши /start ще раз.
@@ -57,13 +57,13 @@ slot_labels = {
     "evening": "🌙 Увечері",
 }
 
-onboarding_time_slots_message = '''
+slots_prompt_message = '''
 Коли тобі зручно отримувати повідомлення? Обери один або кілька варіантів.
 '''
 
-onboarding_time_slots_continue_button = '''Продовжити ➡️'''
+slots_continue_button = '''Продовжити ➡️'''
 
-onboarding_time_slots_empty_warning = '''
+slots_empty_warning = '''
 Обери хоча б один час.
 '''
 
@@ -148,11 +148,8 @@ menu_resumed_message = '''
 Продовжуємо з того місця, де зупинились.
 '''
 
-menu_edit_times_message = '''
-Коли тобі зручно отримувати повідомлення? Обери один або кілька варіантів.
-'''
 
-menu_edit_times_save_button = '''Зберегти ✅'''
+slots_save_button = '''Зберегти ✅'''
 
 menu_edit_times_saved_template = '''
 Готово. Тепер я писатиму тобі: {times}

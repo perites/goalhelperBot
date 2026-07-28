@@ -11,21 +11,21 @@ from telegram.ext import (
     filters, CallbackQueryHandler,
 )
 
-from cohort import pause_user, resume_user
-from config import EDIT_TIME_PREFIX
-from database import User, Answer, Status
-from messages_texts import *
-from stats import build_stats_text
-from time_slots import (
-    build_keyboard,
-    toggle,
-    slot_key,
-    saved_slots,
-    save_slots,
+from app.config import CONTINUE_ACTION, EDIT_TIME_PREFIX
+from app.enums import Status
+from app.services.cycle import pause_user, resume_user
+from app.services.questions import close_open_answers
+from app.services.slots import (
+    build_slots_keyboard,
     format_slots,
-    CONTINUE,
+    save_slots,
+    saved_slots,
+    slot_key,
+    toggle_slot,
 )
-
+from app.services.stats import build_stats_text
+from app.texts import *
+from app.utils import current_user
 
 
 def main_menu_keyboard():
@@ -40,18 +40,8 @@ def main_menu_keyboard():
     )
 
 
-def _current_user(update: Update):
-    return User.get_or_none(User.telegram_id == update.effective_user.id)
-
-
-def _user_times(user):
-    times = [slot.time for slot in user.times]
-
-    return ", ".join(time.strftime("%H:%M") for time in sorted(times))
-
-
 async def handle_my_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = _current_user(update)
+    user = current_user(update)
     if user is None:
         return
 
@@ -60,7 +50,7 @@ async def handle_my_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             intention=user.intention,
             name=user.name,
             category=category_labels[user.intention_type],
-            times=_user_times(user),
+            times=format_slots(saved_slots(user)),
             day=user.cycle_day,
             total=user.cycle_length,
         )
@@ -72,7 +62,7 @@ async def handle_contacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = _current_user(update)
+    user = current_user(update)
     if user is None:
         return
 
@@ -80,7 +70,7 @@ async def handle_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_edit_times(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = _current_user(update)
+    user = current_user(update)
     if user is None:
         return
 
@@ -89,8 +79,8 @@ async def handle_edit_times(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["edit_time_slots"] = selected
 
     await update.message.reply_text(
-        menu_edit_times_message,
-        reply_markup=build_keyboard(selected, EDIT_TIME_PREFIX, menu_edit_times_save_button),
+        slots_prompt_message,
+        reply_markup=build_slots_keyboard(selected, EDIT_TIME_PREFIX, slots_save_button),
     )
 
 
@@ -98,10 +88,10 @@ async def handle_edit_time_toggle(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
 
-    selected = toggle(context.user_data.setdefault("edit_time_slots", set()), slot_key(query.data))
+    selected = toggle_slot(context.user_data.setdefault("edit_time_slots", set()), slot_key(query.data))
 
     await query.edit_message_reply_markup(
-        reply_markup=build_keyboard(selected, EDIT_TIME_PREFIX, menu_edit_times_save_button),
+        reply_markup=build_slots_keyboard(selected, EDIT_TIME_PREFIX, slots_save_button),
     )
 
 
@@ -110,12 +100,12 @@ async def handle_edit_time_save(update: Update, context: ContextTypes.DEFAULT_TY
     selected = context.user_data.get("edit_time_slots", set())
 
     if not selected:
-        await query.answer(onboarding_time_slots_empty_warning, show_alert=True)
+        await query.answer(slots_empty_warning, show_alert=True)
         return
 
     await query.answer()
 
-    user = _current_user(update)
+    user = current_user(update)
     if user is None:
         return
 
@@ -127,7 +117,7 @@ async def handle_edit_time_save(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def handle_pause(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = _current_user(update)
+    user = current_user(update)
     if user is None:
         return
 
@@ -157,7 +147,7 @@ async def handle_pause_confirm(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
     await query.edit_message_reply_markup(reply_markup=None)
 
-    user = _current_user(update)
+    user = current_user(update)
     if user is None:
         return
 
@@ -169,13 +159,6 @@ async def handle_pause_confirm(update: Update, context: ContextTypes.DEFAULT_TYP
         resume_user(user)
         await query.message.reply_text(menu_resumed_message)
         return
-
-    # Pausing shouldn't leave a question hanging open against the paused days.
-    Answer.update(skipped=True).where(
-        (Answer.user == user)
-        & Answer.answered_at.is_null(True)
-        & (Answer.skipped == False)  # noqa: E712 - peewee needs the comparison
-    ).execute()
 
     pause_user(user)
 
@@ -205,16 +188,12 @@ async def handle_finish_confirm(update: Update, context: ContextTypes.DEFAULT_TY
         await query.message.reply_text(menu_finish_cancelled_message)
         return
 
-    user = _current_user(update)
+    user = current_user(update)
     if user is None:
         return
 
     # Close out anything still open so it isn't left dangling as unanswered.
-    Answer.update(skipped=True).where(
-        (Answer.user == user)
-        & Answer.answered_at.is_null(True)
-        & (Answer.skipped == False)  # noqa: E712 - peewee needs the comparison
-    ).execute()
+    close_open_answers(user)
 
     user.status = Status.STOPPED
     user.save()
@@ -234,7 +213,7 @@ pause_confirm_handler = CallbackQueryHandler(handle_pause_confirm, pattern="^pau
 finish_handler = MessageHandler(filters.Text([menu_finish_button]), handle_finish)
 
 edit_time_save_handler = CallbackQueryHandler(
-    handle_edit_time_save, pattern=f"^{EDIT_TIME_PREFIX}:{CONTINUE}$"
+    handle_edit_time_save, pattern=f"^{EDIT_TIME_PREFIX}:{CONTINUE_ACTION}$"
 )
 edit_time_toggle_handler = CallbackQueryHandler(
     handle_edit_time_toggle, pattern=f"^{EDIT_TIME_PREFIX}:"

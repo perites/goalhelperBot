@@ -1,9 +1,10 @@
 """Per-user statistics, shared by the menu and the end-of-cycle summary."""
 from collections import Counter
 
-from config import TOP_EMOTIONS_SHOWN
-from database import Question, Answer, QuestionType
-from messages_texts import menu_stats_template, menu_stats_no_emotions
+from app.config import TOP_EMOTIONS_SHOWN
+from app.models import Question, Answer
+from app.enums import QuestionType
+from app.texts import menu_stats_template, menu_stats_no_emotions
 
 
 def answered_count(user, question_type=None):
