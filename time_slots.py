@@ -1,16 +1,15 @@
 """Time-slot picking, shared by onboarding and the menu editor."""
-from datetime import time as dt_time
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from config import SLOT_TIMES, CONTINUE_ACTION as CONTINUE
 from database import UserTime
+from messages_texts import slot_labels
 
-CONTINUE = "continue"
-
+# Times come from config, labels from messages_texts — joined here so callers
+# still see one dict.
 TIME_SLOTS_CHOICES = {
-    "morning": {"time": dt_time(9, 0), "label": "🌅 Зранку"},
-    "noon": {"time": dt_time(13, 0), "label": "🌤 Вдень"},
-    "evening": {"time": dt_time(19, 0), "label": "🌙 Увечері"},
+    key: {"time": slot_time, "label": slot_labels[key]}
+    for key, slot_time in SLOT_TIMES.items()
 }
 
 

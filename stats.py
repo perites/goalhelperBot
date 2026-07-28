@@ -1,10 +1,9 @@
 """Per-user statistics, shared by the menu and the end-of-cycle summary."""
 from collections import Counter
 
+from config import TOP_EMOTIONS_SHOWN
 from database import Question, Answer, QuestionType
 from messages_texts import menu_stats_template, menu_stats_no_emotions
-
-TOP_EMOTIONS = 3
 
 
 def answered_count(user, question_type=None):
@@ -35,7 +34,7 @@ def top_emotions(user):
         )
     )
 
-    ranked = Counter(row.answer for row in chosen).most_common(TOP_EMOTIONS)
+    ranked = Counter(row.answer for row in chosen).most_common(TOP_EMOTIONS_SHOWN)
 
     return ", ".join(emotion for emotion, _ in ranked)
 

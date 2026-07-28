@@ -12,7 +12,8 @@ from datetime import timedelta
 from telegram.ext import ContextTypes
 
 from askquestions import send_question
-from clock import now_kyiv, KYIV_TZ
+from clock import now_kyiv
+from config import SWEEP_HOUR, TICK_INTERVAL_HOURS
 from cohort import (
     complete_cycle,
     current_cohort,
@@ -24,8 +25,7 @@ from cohort import (
 )
 from database import User, UserTime, Answer, Status
 
-SWEEP_HOUR = 6
-TICK_INTERVAL = timedelta(hours=1)
+TICK_INTERVAL = timedelta(hours=TICK_INTERVAL_HOURS)
 
 
 def users_due_at(hour):

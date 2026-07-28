@@ -10,10 +10,9 @@ from telegram.ext import (
     filters, CallbackQueryHandler,
 )
 
+from config import QUESTION_ORDER_STEP
 from database import User, Question, Answer, FinalQuestion, FinalAnswer, Status
 from messages_texts import *
-
-ORDER_STEP = 10
 
 
 def seed_questions():
@@ -25,12 +24,12 @@ def seed_questions():
                 text=text,
                 type=question_type,
                 options=json.dumps(options, ensure_ascii=False) if options else None,
-                order=position * ORDER_STEP,
+                order=position * QUESTION_ORDER_STEP,
             )
 
     if not FinalQuestion.select().exists():
         for position, text in enumerate(final_questions, start=1):
-            FinalQuestion.create(text=text, order=position * ORDER_STEP)
+            FinalQuestion.create(text=text, order=position * QUESTION_ORDER_STEP)
 
 
 def next_question_for(user):

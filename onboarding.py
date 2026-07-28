@@ -11,6 +11,7 @@ from telegram.ext import (
 )
 
 from cohort import join_cohort, put_on_waitlist
+from config import TIME_SLOT_PREFIX
 from database import User, Status
 from helpers import get_message
 from menu import main_menu_keyboard
@@ -26,7 +27,6 @@ from time_slots import (
 
 CONSENT, NAME, CATEGORY, INTENTION, TIME_SLOTS, CONFIRM, READY = range(7)
 
-TIME_SLOT_PREFIX = "time_slot"
 
 
 async def begin_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE):

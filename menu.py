@@ -12,6 +12,7 @@ from telegram.ext import (
 )
 
 from cohort import pause_user, resume_user
+from config import EDIT_TIME_PREFIX
 from database import User, Answer, Status
 from messages_texts import *
 from stats import build_stats_text
@@ -25,7 +26,6 @@ from time_slots import (
     CONTINUE,
 )
 
-EDIT_TIME_PREFIX = "edit_time"
 
 
 def main_menu_keyboard():

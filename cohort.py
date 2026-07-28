@@ -7,10 +7,12 @@ from datetime import timedelta
 from enum import IntEnum
 
 from clock import now_kyiv, today_kyiv
-from database import (
-    User, Cohort, Status, CohortStatus,
-    DEFAULT_MAX_PEOPLE, DEFAULT_ENROLLMENT_WINDOW_DAYS, PAUSE_DURATION_DAYS,
+from config import (
+    DEFAULT_MAX_PEOPLE,
+    DEFAULT_ENROLLMENT_WINDOW_DAYS,
+    PAUSE_DURATION_DAYS,
 )
+from database import User, Cohort, Status, CohortStatus
 from messages_texts import (
     cycle_final_summary_intro,
     cycle_final_invite_message,

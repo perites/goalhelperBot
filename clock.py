@@ -8,7 +8,9 @@ timestamp naive avoids mixing aware and naive values in comparisons.
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-KYIV_TZ = ZoneInfo("Europe/Kyiv")
+from config import TIMEZONE
+
+KYIV_TZ = ZoneInfo(TIMEZONE)
 
 
 def now_kyiv() -> datetime:

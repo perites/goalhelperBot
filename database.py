@@ -8,13 +8,14 @@ from peewee import (
 )
 
 from clock import now_kyiv
+from config import (
+    DATABASE_NAME,
+    CYCLE_LENGTH_DAYS,
+    PAUSE_DURATION_DAYS,
+    DEFAULT_MAX_PEOPLE,
+)
 
-db = SqliteDatabase("goalbot.db")
-
-CYCLE_LENGTH_DAYS = 30
-PAUSE_DURATION_DAYS = 3
-DEFAULT_MAX_PEOPLE = 10
-DEFAULT_ENROLLMENT_WINDOW_DAYS = 14
+db = SqliteDatabase(DATABASE_NAME)
 
 
 class Status(IntEnum):
