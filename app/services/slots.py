@@ -1,16 +1,54 @@
-"""Message-time slots, shared by onboarding and the menu editor."""
+"""Message-time slots, shared by onboarding and the menu editor.
+
+A slot is identified by its own time, formatted "HH:MM" — not by a name like
+"morning". That means the offered set below is just a list of times: adding
+one is a one-line change, and nothing downstream needs a matching label,
+enum, or key. Zero-padding also makes the ids sort chronologically as plain
+strings, which is what the distribution below relies on.
+"""
+from datetime import datetime
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from app.config import CONTINUE_ACTION, SLOT_TIMES
+from app.config import (
+    CONTINUE_ACTION,
+    QUESTIONS_PER_DAY,
+    SLOT_EVENING_FROM_HOUR,
+    SLOT_TIMES,
+    SLOT_MORNING_UNTIL_HOUR,
+)
 from app.models import UserTime
-from app.texts import slot_labels
 
-# Times come from config, labels from texts — joined here so callers see one
-# dict. The two must share keys; tests assert that.
-SLOTS = {
-    key: {"time": slot_time, "label": slot_labels[key]}
-    for key, slot_time in SLOT_TIMES.items()
-}
+SLOT_FORMAT = "%H:%M"
+
+
+def slot_id(slot_time):
+    """The identifier for a time: 09:00, 13:00, 19:00."""
+    return slot_time.strftime(SLOT_FORMAT)
+
+
+def slot_time(slot):
+    """Back to a time object, for storing on UserTime."""
+    return datetime.strptime(slot, SLOT_FORMAT).time()
+
+
+# The times a participant can choose from. Everything else derives from these.
+AVAILABLE_SLOTS = [slot_id(value) for value in SLOT_TIMES]
+
+
+def slot_label(slot):
+    """Time of day conveyed by an emoji rather than a stored name, so any hour
+    can be offered without inventing a word for it."""
+    hour = slot_time(slot).hour
+
+    if hour < SLOT_MORNING_UNTIL_HOUR:
+        icon = "🌅"
+    elif hour < SLOT_EVENING_FROM_HOUR:
+        icon = "🌤"
+    else:
+        icon = "🌙"
+
+    return f"{icon} {slot}"
 
 
 def build_slots_keyboard(selected, prefix, confirm_label):
@@ -18,10 +56,10 @@ def build_slots_keyboard(selected, prefix, confirm_label):
     editor don't claim each other's taps."""
     keyboard = [
         [InlineKeyboardButton(
-            f"{'✅ ' if key in selected else ''}{slot['label']}",
-            callback_data=f"{prefix}:{key}",
+            f"{'✅ ' if slot in selected else ''}{slot_label(slot)}",
+            callback_data=f"{prefix}:{slot}",
         )]
-        for key, slot in SLOTS.items()
+        for slot in AVAILABLE_SLOTS
     ]
     keyboard.append(
         [InlineKeyboardButton(confirm_label, callback_data=f"{prefix}:{CONTINUE_ACTION}")]
@@ -30,36 +68,67 @@ def build_slots_keyboard(selected, prefix, confirm_label):
     return InlineKeyboardMarkup(keyboard)
 
 
-def toggle_slot(selected, key):
-    selected.symmetric_difference_update({key})
+def toggle_slot(selected, slot):
+    selected.symmetric_difference_update({slot})
 
     return selected
 
 
-def slot_key(callback_data):
-    return callback_data.split(":")[1]
+def slot_from_callback(callback_data):
+    """The slot id out of "edit_time:09:00" — split once, since the id itself
+    contains a colon."""
+    return callback_data.split(":", 1)[1]
 
 
 def saved_slots(user):
-    """The slot keys currently persisted for this user."""
-    stored = {slot.time for slot in user.times}
+    """The slots currently persisted for this user.
 
-    return {key for key, slot in SLOTS.items() if slot["time"] in stored}
+    Read straight off UserTime, so a time that isn't in AVAILABLE_SLOTS any
+    more still shows up instead of being silently dropped.
+    """
+    return {slot_id(row.time) for row in user.times}
 
 
-def save_slots(user_id, keys):
+def save_slots(user_id, slots):
     UserTime.delete().where(UserTime.user == user_id).execute()
     UserTime.bulk_create([
-        UserTime(user=user_id, time=SLOTS[key]["time"])
-        for key in keys
+        UserTime(user=user_id, time=slot_time(slot))
+        for slot in slots
     ])
 
 
-def format_slots(keys):
+def slots_in_order(slots):
+    """Chronological. Zero-padded HH:MM sorts correctly as a string."""
+    return sorted(slots)
+
+
+def questions_per_slot(user_slots, total=None):
+    """Spread the day's questions across the slots someone picked.
+
+    Remainders go to the later slots, so the day builds rather than
+    front-loads. Every chosen slot gets at least one — a slot you asked for
+    should never be silent — which is why asking for fewer questions than you
+    have slots raises the daily total instead of quieting one.
+    """
+    ordered = slots_in_order(user_slots)
+    if not ordered:
+        return {}
+
+    total = QUESTIONS_PER_DAY if total is None else total
+    base, remainder = divmod(total, len(ordered))
+
+    # Fewer questions than slots: one each, and the remainder is meaningless.
+    if base == 0:
+        return {slot: 1 for slot in ordered}
+
+    counts = {slot: base for slot in ordered}
+    for slot in ordered[len(ordered) - remainder:]:
+        counts[slot] += 1
+
+    return counts
+
+
+def format_slots(slots):
     """Single display format for chosen slots, used by onboarding's summary,
     the menu's info screen, and the save confirmation."""
-    return ", ".join(
-        f"{slot['label']} ({slot['time'].strftime('%H:%M')})"
-        for key, slot in SLOTS.items()
-        if key in keys
-    )
+    return ", ".join(slot_label(slot) for slot in slots_in_order(slots))

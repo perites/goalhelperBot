@@ -23,7 +23,7 @@ from app.services.slots import (
     build_slots_keyboard,
     format_slots,
     save_slots,
-    slot_key,
+    slot_from_callback,
     toggle_slot,
 )
 
@@ -131,7 +131,7 @@ async def handle_time_slot_toggle(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
 
-    selected = toggle_slot(context.user_data.setdefault("time_slots", set()), slot_key(query.data))
+    selected = toggle_slot(context.user_data.setdefault("time_slots", set()), slot_from_callback(query.data))
 
     await query.edit_message_reply_markup(
         reply_markup=build_slots_keyboard(selected, TIME_SLOT_PREFIX, slots_continue_button),
@@ -241,7 +241,10 @@ async def handle_ready(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     logger.info("user=%s finished onboarding; sending first question", user.telegram_id)
-    await deliver_question(context.bot, user, reason="onboarding")
+
+    # slot=None deliberately: this one belongs to no slot's run, so it neither
+    # consumes a quota nor chains. The scheduler starts the real runs.
+    await deliver_question(context.bot, user, reason="onboarding", slot=None)
 
     return ConversationHandler.END
 

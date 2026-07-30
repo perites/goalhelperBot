@@ -14,7 +14,8 @@ from telegram.ext import ContextTypes
 from app import clock
 from app.config import SWEEP_HOUR, TICK_INTERVAL_HOURS
 from app.enums import Status
-from app.models import Answer, User, UserTime
+from app.logs import get_logger
+from app.models import User, UserTime
 from app.services.cohort import cohort_is_complete, current_cohort, end_cohort
 from app.services.cycle import (
     complete_cycle,
@@ -22,8 +23,8 @@ from app.services.cycle import (
     users_due_for_completion,
     users_with_expired_pause,
 )
-from app.logs import get_logger
-from app.services.questions import deliver_question
+from app.services.questions import deliver_question, sent_in_slot_today
+from app.services.slots import slot_id
 
 logger = get_logger(__name__)
 
@@ -53,15 +54,20 @@ def users_due_at(hour):
     return list(seen.values())
 
 
-def already_sent_this_hour(user, now):
-    """Guards against a restart inside the hour re-sending the same slot."""
-    hour_start = now.replace(minute=0, second=0, microsecond=0)
+def slot_already_started(user, slot):
+    """The scheduler only ever *starts* a slot's run — the rest of it is driven
+    by answers. This is also the restart guard: a tick firing twice can't
+    restart a run that's already in flight."""
+    return sent_in_slot_today(user, slot) > 0
 
-    return (
-        Answer.select()
-        .where((Answer.user == user) & (Answer.sent_at >= hour_start))
-        .exists()
-    )
+
+def slot_at_hour(user, hour):
+    """The slot this user has in this hour, taken from their own UserTime row
+    rather than from the tick — so a time carrying minutes is identified as
+    itself ("09:30") even though it's delivered at the top of the hour."""
+    matching = sorted(row.time for row in user.times if row.time.hour == hour)
+
+    return slot_id(matching[0]) if matching else None
 
 
 async def send_due_questions(bot, now):
@@ -73,12 +79,16 @@ async def send_due_questions(bot, now):
     logger.debug("Hour %02d: %s user(s) due", now.hour, len(due))
 
     for user in due:
-        if already_sent_this_hour(user, now):
-            skipped += 1
-            logger.debug("user=%s already had a question this hour", user.telegram_id)
+        slot = slot_at_hour(user, now.hour)
+        if slot is None:
             continue
 
-        if await deliver_question(bot, user, reason="scheduled") is None:
+        if slot_already_started(user, slot):
+            skipped += 1
+            logger.debug("user=%s already started the %s run today", user.telegram_id, slot)
+            continue
+
+        if await deliver_question(bot, user, reason="scheduled", slot=slot) is None:
             failed += 1
             continue
 

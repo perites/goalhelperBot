@@ -50,13 +50,6 @@ onboarding_intention_message = '''
 Ти вибрав: “Я хочу {intention_type}...“
 '''
 
-# Keys must match SLOT_TIMES in config.py.
-slot_labels = {
-    "morning": "🌅 Зранку",
-    "noon": "🌤 Вдень",
-    "evening": "🌙 Увечері",
-}
-
 slots_prompt_message = '''
 Коли тобі зручно отримувати повідомлення? Обери один або кілька варіантів.
 '''

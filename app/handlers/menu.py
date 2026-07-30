@@ -21,7 +21,7 @@ from app.services.slots import (
     format_slots,
     save_slots,
     saved_slots,
-    slot_key,
+    slot_from_callback,
     toggle_slot,
 )
 from app.services.stats import build_stats_text
@@ -114,7 +114,7 @@ async def handle_edit_time_toggle(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
 
-    selected = toggle_slot(context.user_data.setdefault("edit_time_slots", set()), slot_key(query.data))
+    selected = toggle_slot(context.user_data.setdefault("edit_time_slots", set()), slot_from_callback(query.data))
 
     await query.edit_message_reply_markup(
         reply_markup=build_slots_keyboard(selected, EDIT_TIME_PREFIX, slots_save_button),

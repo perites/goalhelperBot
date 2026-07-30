@@ -137,6 +137,12 @@ class Answer(BaseModel):
     # reply that lands the next day doesn't redraw with the wrong number.
     cycle_day = IntegerField(null=True)
 
+    # Which slot's run this belongs to, or NULL for sends outside the schedule
+    # (the onboarding question, /ask). It can't be inferred from sent_at:
+    # answering the 09:00 question at 12:30 sends the next one at 12:30, still
+    # as part of the morning run.
+    slot = CharField(null=True)
+
     @classmethod
     def open_for(cls, user):
         """Questions sent to this user that are still awaiting a reply."""

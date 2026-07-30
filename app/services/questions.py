@@ -4,6 +4,7 @@ Pure service layer — no Telegram handlers live here, so nothing in this module
 needs to know about updates or callbacks.
 """
 import json
+from datetime import timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -11,6 +12,7 @@ from app import clock
 from app.config import QUESTION_ORDER_STEP
 from app.logs import get_logger
 from app.models import Answer, FinalAnswer, FinalQuestion, Question
+from app.services.slots import questions_per_slot, saved_slots
 from app.texts import (
     final_questions,
     final_questions_block,
@@ -116,7 +118,7 @@ def render_question(answer):
     )
 
 
-async def send_question(bot, user):
+async def send_question(bot, user, slot=None):
     """Close out the previous question, then send the next one."""
     close_open_answers(user)
 
@@ -129,6 +131,7 @@ async def send_question(bot, user):
         question=question,
         sent_at=clock.now_kyiv(),
         cycle_day=user.cycle_day,
+        slot=slot,
     )
 
     message = await bot.send_message(
@@ -149,7 +152,7 @@ async def send_question(bot, user):
     return answer
 
 
-async def deliver_question(bot, user, reason):
+async def deliver_question(bot, user, reason, slot=None):
     """Send the next question and log the outcome. Returns the Answer, or None
     if nothing went out.
 
@@ -158,7 +161,7 @@ async def deliver_question(bot, user, reason):
     triggered it, so the log distinguishes scheduled sends from manual ones.
     """
     try:
-        answer = await send_question(bot, user)
+        answer = await send_question(bot, user, slot=slot)
     except Exception:  # noqa: BLE001
         logger.warning(
             "Failed to send question to user=%s (%s)", user.telegram_id, reason, exc_info=True
@@ -172,11 +175,56 @@ async def deliver_question(bot, user, reason):
         return None
 
     logger.info(
-        "Sent question to user=%s day=%s question=%s (%s)",
-        user.telegram_id, answer.cycle_day, answer.question_id, reason,
+        "Sent question to user=%s day=%s question=%s slot=%s (%s)",
+        user.telegram_id, answer.cycle_day, answer.question_id, slot or "-", reason,
     )
 
     return answer
+
+
+def sent_in_slot_today(user, slot):
+    """How many questions have gone out for this slot today."""
+    if slot is None:
+        return 0
+
+    day_start = clock.now_kyiv().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    return (
+        Answer.select()
+        .where(
+            (Answer.user == user)
+            & (Answer.slot == slot)
+            & (Answer.sent_at >= day_start)
+            & (Answer.sent_at < day_start + timedelta(days=1))
+        )
+        .count()
+    )
+
+
+def slot_quota(user, slot):
+    """How many questions this slot owes today, which depends on how many
+    other slots the user picked."""
+    return questions_per_slot(saved_slots(user)).get(slot, 0)
+
+
+async def send_next_in_slot(bot, user, slot):
+    """Continue a slot's run, if the day's quota leaves room. Returns None
+    when the run is finished, which is the caller's cue to acknowledge the
+    answer instead."""
+    if slot is None:
+        return None
+
+    already = sent_in_slot_today(user, slot)
+    quota = slot_quota(user, slot)
+
+    if already >= quota:
+        logger.debug(
+            "Slot %s finished for user=%s (%s of %s)",
+            slot, user.telegram_id, already, quota,
+        )
+        return None
+
+    return await deliver_question(bot, user, reason="chain", slot=slot)
 
 
 async def show_resolved_answer(bot, answer):

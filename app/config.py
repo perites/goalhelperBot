@@ -44,11 +44,35 @@ SWEEP_HOUR = 6
 # --- Message slots ---------------------------------------------------------
 
 # Keys must match `slot_labels` in messages_texts.py.
-SLOT_TIMES = {
-    "morning": time(9, 0),
-    "noon": time(13, 0),
-    "evening": time(19, 0),
-}
+# The times a participant can pick from. A slot is identified by its own time
+# ("09:00"), so this is the only place that decides what's on offer — adding
+# time(7, 0) here needs no other change anywhere.
+#
+# Delivery happens on the hour: the scheduler ticks hourly and matches on the
+# hour alone, so a time with minutes would fire at the top of its hour.
+
+# purely for UI picks
+SLOT_TIMES = [
+    time(9, 0),
+    time(13, 0),
+    time(16, 0),
+    time(19, 0),
+]
+
+# Which emoji labels a slot, since there's no stored name to carry that.
+SLOT_MORNING_UNTIL_HOUR = 12
+SLOT_EVENING_FROM_HOUR = 17
+
+# How many questions someone receives per day, spread across whichever slots
+# they chose. Timing is the participant's choice; volume is the programme's.
+#
+# Two things it is not:
+#   - not a hard cap: every chosen slot is floored at one question, so picking
+#     more slots than this number raises the daily total rather than leaving a
+#     slot you asked for silent;
+#   - not a guarantee: a slot's run only advances when a question is answered,
+#     so going quiet ends the day early.
+QUESTIONS_PER_DAY = 3
 
 # --- Questions -------------------------------------------------------------
 
@@ -99,6 +123,7 @@ def admin_chat_ids():
     raw = os.getenv("ADMIN_CHAT_IDS", "")
 
     return [int(part) for part in raw.replace(" ", "").split(",") if part]
+
 
 # --- Callback data prefixes ------------------------------------------------
 

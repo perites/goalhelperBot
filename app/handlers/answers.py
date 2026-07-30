@@ -19,6 +19,7 @@ from app.models import Answer, User
 from app.services.cycle import complete_cycle, reached_final_day, send_closing_summary
 from app.services.questions import (
     deliver_question,
+    send_next_in_slot,
     pending_answer,
     pending_final_answer,
     show_resolved_answer,
@@ -55,6 +56,16 @@ async def _hand_off_if_final_day(bot, user):
     await complete_cycle(bot, user)
 
     return True
+
+
+async def _after_daily_answer(bot, user, answer):
+    """Reaching the last day beats everything; otherwise carry on with this
+    slot's run. Returns True when a message was sent, which tells the caller
+    to skip the plain acknowledgement."""
+    if await _hand_off_if_final_day(bot, user):
+        return True
+
+    return await send_next_in_slot(bot, user, answer.slot) is not None
 
 
 async def handle_answer_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -122,7 +133,7 @@ async def handle_option_button(update: Update, context: ContextTypes.DEFAULT_TYP
     # Rewriting the message also drops its buttons.
     await show_resolved_answer(context.bot, answer)
 
-    if not await _hand_off_if_final_day(context.bot, current_user(update)):
+    if not await _after_daily_answer(context.bot, current_user(update), answer):
         await query.message.reply_text(question_saved_message)
 
 
@@ -164,7 +175,7 @@ async def handle_answer_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     await show_resolved_answer(context.bot, answer)
 
-    if not await _hand_off_if_final_day(context.bot, user):
+    if not await _after_daily_answer(context.bot, user, answer):
         await update.message.reply_text(question_saved_message)
 
 
