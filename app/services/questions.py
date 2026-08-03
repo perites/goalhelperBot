@@ -23,6 +23,7 @@ from app.texts import (
     final_questions_block,
     question_answer_button,
     question_back_button,
+    question_free_text_button,
     question_answered_suffix,
     question_message_template,
     question_skip_button,
@@ -37,31 +38,30 @@ def _encode_options(options):
     return json.dumps(options, ensure_ascii=False) if options else None
 
 
+def _create_question(spec, order, parent=None):
+    """One seed entry. Everything but text and type is optional."""
+    return Question.create(
+        text=spec["text"],
+        type=spec["type"],
+        options=_encode_options(spec.get("options")),
+        allows_free_text=spec.get("free_text", False),
+        order=order,
+        parent=parent,
+    )
+
+
 def seed_questions():
     """Populate both banks once, leaving sparse gaps in `order` so questions
     can be inserted later without renumbering."""
     if not Question.select().exists():
-        for position, (text, question_type, options, follow_ups) in enumerate(
-            sample_questions, start=1
-        ):
+        for position, spec in enumerate(sample_questions, start=1):
             order = position * QUESTION_ORDER_STEP
-            parent = Question.create(
-                text=text,
-                type=question_type,
-                options=_encode_options(options),
-                order=order,
-            )
+            parent = _create_question(spec, order)
 
             # Follow-ups sit inside the parent's order gap, so they stay
             # between it and the next rotation question.
-            for offset, (sub_text, sub_type, sub_options) in enumerate(follow_ups, start=1):
-                Question.create(
-                    text=sub_text,
-                    type=sub_type,
-                    options=_encode_options(sub_options),
-                    order=order + offset,
-                    parent=parent,
-                )
+            for offset, follow_up in enumerate(spec.get("follow_ups", ()), start=1):
+                _create_question(follow_up, order + offset, parent=parent)
 
     if not FinalQuestion.select().exists():
         for position, text in enumerate(final_questions, start=1):
@@ -204,6 +204,16 @@ def build_question_keyboard(question, answer, group=None):
                 )
 
         keyboard = _option_rows(buttons)
+
+        # Carries the same callback as [Відповісти] on an open question: it
+        # prompts and leaves the row unresolved, so the ordinary text handler
+        # picks the reply up. Top level only — Повернутись is one tap away.
+        if question.allows_free_text:
+            keyboard.append([
+                InlineKeyboardButton(
+                    question_free_text_button, callback_data=f"answer:{answer.id}"
+                )
+            ])
     else:
         keyboard = _option_rows([
             InlineKeyboardButton(choice, callback_data=f"option:{answer.id}:{group}:{index}")

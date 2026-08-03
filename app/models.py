@@ -120,6 +120,11 @@ class Question(BaseModel):
     order = IntegerField(unique=True)
     parent = ForeignKeyField("self", null=True, backref="follow_ups")
 
+    # Offer a "write your own" button alongside the listed options. Only
+    # meaningful when there are options — a question without any already
+    # accepts typed answers and nothing else.
+    allows_free_text = BooleanField(default=False)
+
     @property
     def option_list(self):
         """Parsed answer options, or None for an open question."""
