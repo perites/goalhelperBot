@@ -12,7 +12,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from app import clock
 from app.config import (
     BACK_ACTION,
-    QUESTION_CATEGORY_ORDER,
+    DEFAULT_CATEGORY_ORDER,
+    DEFAULT_QUESTIONS_PER_DAY,
     OPTIONS_PER_ROW,
     QUESTION_ORDER_STEP,
     SHORT_OPTION_LENGTH,
@@ -82,9 +83,15 @@ def rotation_questions():
     return Question.select().where(Question.parent.is_null(True))
 
 
-def category_at(index):
+def category_order_for(user):
+    """The cycle this user's cohort runs on, falling back to the default for
+    anyone not attached to one."""
+    return user.cohort.categories if user.cohort else list(DEFAULT_CATEGORY_ORDER)
+
+
+def category_at(order, index):
     """Wraps, so an index left over from a longer order list is still valid."""
-    return QUESTION_CATEGORY_ORDER[index % len(QUESTION_CATEGORY_ORDER)]
+    return order[index % len(order)]
 
 
 def last_rotation_answer(user):
@@ -98,14 +105,14 @@ def last_rotation_answer(user):
     )
 
 
-def next_category_index(user):
+def next_category_index(user, order):
     """Where this user is in the category cycle."""
     last = last_rotation_answer(user)
 
     if last is None or last.category_index is None:
         return 0
 
-    return (last.category_index + 1) % len(QUESTION_CATEGORY_ORDER)
+    return (last.category_index + 1) % len(order)
 
 
 def pick_from_category(user, category, rng=None):
@@ -145,16 +152,18 @@ def next_question_for(user, rng=None):
     """The next daily question: take the next category in the cycle and pick
     from it. Categories with nothing in them are skipped rather than stalling,
     so an order list can name a category before its questions exist."""
-    start = next_category_index(user)
+    order = category_order_for(user)
+    start = next_category_index(user, order)
 
-    for offset in range(len(QUESTION_CATEGORY_ORDER)):
-        index = (start + offset) % len(QUESTION_CATEGORY_ORDER)
-        question = pick_from_category(user, category_at(index), rng=rng)
+    for offset in range(len(order)):
+        index = (start + offset) % len(order)
+        category = category_at(order, index)
+        question = pick_from_category(user, category, rng=rng)
 
         if question is not None:
             return question, index
 
-        logger.debug("No questions for category %s; skipping", category_at(index).name)
+        logger.debug("No questions for category %s; skipping", category.name)
 
     return None, None
 
@@ -443,10 +452,17 @@ async def send_follow_up(bot, user, parent_answer):
     return answer
 
 
+def daily_total_for(user):
+    """How many questions a day this user's cohort asks for."""
+    return user.cohort.questions_per_day if user.cohort else DEFAULT_QUESTIONS_PER_DAY
+
+
 def slot_quota(user, slot):
-    """How many questions this slot owes today, which depends on how many
-    other slots the user picked."""
-    return questions_per_slot(saved_slots(user)).get(slot, 0)
+    """How many questions this slot owes today, which depends on the cohort's
+    daily total and how many other slots the user picked."""
+    spread = questions_per_slot(saved_slots(user), total=daily_total_for(user))
+
+    return spread.get(slot, 0)
 
 
 async def send_next_in_slot(bot, user, slot):

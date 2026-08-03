@@ -66,6 +66,8 @@ SLOT_TIMES = [
 SLOT_MORNING_UNTIL_HOUR = 12
 SLOT_EVENING_FROM_HOUR = 17
 
+# Seed value for Cohort.questions_per_day — read that, not this, at runtime.
+#
 # How many questions someone receives per day, spread across whichever slots
 # they chose. Timing is the participant's choice; volume is the programme's.
 #
@@ -75,7 +77,7 @@ SLOT_EVENING_FROM_HOUR = 17
 #     slot you asked for silent;
 #   - not a guarantee: a slot's run only advances when a question is answered,
 #     so going quiet ends the day early.
-QUESTIONS_PER_DAY = 3
+DEFAULT_QUESTIONS_PER_DAY = 3
 
 # --- Questions -------------------------------------------------------------
 
@@ -83,6 +85,8 @@ QUESTIONS_PER_DAY = 3
 # can be slotted in later without renumbering.
 QUESTION_ORDER_STEP = 10
 
+# Seed value for Cohort.category_order — read `cohort.categories` at runtime.
+#
 # The rhythm of the daily questions. Each send takes the next category here
 # and picks a question of that type; after the last it wraps to the first, so
 # the cycle runs continuously rather than restarting each day.
@@ -91,14 +95,17 @@ QUESTION_ORDER_STEP = 10
 # Categories with no questions yet are skipped, so it's safe to list one
 # before writing its questions.
 #
-# Note the interaction with QUESTIONS_PER_DAY: when the two lengths match,
+# Note the interaction with questions_per_day: when the two lengths match,
 # every day has the same shape (emotion, then a step, then gratitude). When
 # they differ, the pattern rotates across days instead.
-QUESTION_CATEGORY_ORDER = [
+DEFAULT_CATEGORY_ORDER = [
     QuestionType.EMOTION,
     QuestionType.STEP,
     QuestionType.GRATITUDE,
 ]
+
+# Stored form: comma-joined QuestionType values.
+DEFAULT_CATEGORY_ORDER_CSV = ",".join(str(int(t)) for t in DEFAULT_CATEGORY_ORDER)
 
 # How many of the most frequent emotions the statistics screen lists.
 TOP_EMOTIONS_SHOWN = 3

@@ -12,7 +12,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config import (
     CONTINUE_ACTION,
-    QUESTIONS_PER_DAY,
+    DEFAULT_QUESTIONS_PER_DAY,
     SLOT_EVENING_FROM_HOUR,
     SLOT_TIMES,
     SLOT_MORNING_UNTIL_HOUR,
@@ -114,7 +114,7 @@ def questions_per_slot(user_slots, total=None):
     if not ordered:
         return {}
 
-    total = QUESTIONS_PER_DAY if total is None else total
+    total = DEFAULT_QUESTIONS_PER_DAY if total is None else total
     base, remainder = divmod(total, len(ordered))
 
     # Fewer questions than slots: one each, and the remainder is meaningless.

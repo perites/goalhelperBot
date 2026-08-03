@@ -7,12 +7,15 @@ from peewee import (
 )
 
 from app import clock
-from app.enums import CohortStatus
+from app.enums import CohortStatus, QuestionType
 from app.config import (
     DATABASE_NAME,
     CYCLE_LENGTH_DAYS,
-    PAUSE_DURATION_DAYS,
+    DEFAULT_CATEGORY_ORDER,
+    DEFAULT_CATEGORY_ORDER_CSV,
     DEFAULT_MAX_PEOPLE,
+    DEFAULT_QUESTIONS_PER_DAY,
+    PAUSE_DURATION_DAYS,
 )
 
 db = SqliteDatabase(DATABASE_NAME)
@@ -33,6 +36,30 @@ class Cohort(BaseModel):
     duration_days = IntegerField(default=CYCLE_LENGTH_DAYS)
     max_people = IntegerField(default=DEFAULT_MAX_PEOPLE)
     status = IntegerField(default=CohortStatus.PLANNED)
+
+    # How many questions a participant gets per day, spread across the slots
+    # they picked. See config.DEFAULT_QUESTIONS_PER_DAY for the caveats.
+    questions_per_day = IntegerField(default=DEFAULT_QUESTIONS_PER_DAY)
+
+    # The rhythm of the daily questions, as QuestionType values joined by
+    # commas — "0,1,3". Integers rather than names so an admin panel can render
+    # them as a picker without parsing prose.
+    category_order = CharField(default=DEFAULT_CATEGORY_ORDER_CSV)
+
+    @property
+    def categories(self):
+        """The category order as QuestionType values. Unknown or malformed
+        entries are dropped rather than raising, so a bad edit degrades to a
+        shorter cycle instead of stopping every send."""
+        known = {member.value for member in QuestionType}
+        parsed = []
+
+        for part in (self.category_order or "").split(","):
+            part = part.strip()
+            if part.isdigit() and int(part) in known:
+                parsed.append(QuestionType(int(part)))
+
+        return parsed or list(DEFAULT_CATEGORY_ORDER)
 
 
 class User(BaseModel):
@@ -161,7 +188,7 @@ class Answer(BaseModel):
     # what the quota and statistics exclude on.
     parent = ForeignKeyField("self", null=True, backref="follow_ups")
 
-    # Which position in QUESTION_CATEGORY_ORDER this send came from. Recorded
+    # Which position in the cohort's category order this send came from. Recorded
     # rather than derived from the question's type, because a category may
     # appear at several positions and the type alone wouldn't say which.
     category_index = IntegerField(null=True)
