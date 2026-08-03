@@ -161,6 +161,11 @@ class Answer(BaseModel):
     # what the quota and statistics exclude on.
     parent = ForeignKeyField("self", null=True, backref="follow_ups")
 
+    # Which position in QUESTION_CATEGORY_ORDER this send came from. Recorded
+    # rather than derived from the question's type, because a category may
+    # appear at several positions and the type alone wouldn't say which.
+    category_index = IntegerField(null=True)
+
     @classmethod
     def open_for(cls, user):
         """Questions sent to this user that are still awaiting a reply."""

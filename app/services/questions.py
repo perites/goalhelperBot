@@ -4,13 +4,15 @@ Pure service layer — no Telegram handlers live here, so nothing in this module
 needs to know about updates or callbacks.
 """
 import json
-from datetime import timedelta
+import random
+from datetime import datetime, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app import clock
 from app.config import (
     BACK_ACTION,
+    QUESTION_CATEGORY_ORDER,
     OPTIONS_PER_ROW,
     QUESTION_ORDER_STEP,
     SHORT_OPTION_LENGTH,
@@ -80,30 +82,81 @@ def rotation_questions():
     return Question.select().where(Question.parent.is_null(True))
 
 
-def next_question_for(user):
-    """The next question in `order`, wrapping to the first once the bank runs out."""
-    first_question = rotation_questions().order_by(Question.order).first()
+def category_at(index):
+    """Wraps, so an index left over from a longer order list is still valid."""
+    return QUESTION_CATEGORY_ORDER[index % len(QUESTION_CATEGORY_ORDER)]
 
-    # Follow-ups are excluded here too, or the rotation pointer would jump to
-    # a follow-up's order and the daily sequence would derail from then on.
-    last_sent = (
+
+def last_rotation_answer(user):
+    """Their most recent daily question. Follow-ups are excluded — they don't
+    advance the category cycle."""
+    return (
         Answer.select()
         .where((Answer.user == user) & Answer.parent.is_null(True))
         .order_by(Answer.sent_at.desc(), Answer.id.desc())
         .first()
     )
 
-    if last_sent is None:
-        return first_question
 
-    following = (
-        rotation_questions()
-        .where(Question.order > last_sent.question.order)
-        .order_by(Question.order)
-        .first()
-    )
+def next_category_index(user):
+    """Where this user is in the category cycle."""
+    last = last_rotation_answer(user)
 
-    return following or first_question
+    if last is None or last.category_index is None:
+        return 0
+
+    return (last.category_index + 1) % len(QUESTION_CATEGORY_ORDER)
+
+
+def pick_from_category(user, category, rng=None):
+    """A question of this type, favouring the ones this user has seen least
+    recently and choosing at random between equals.
+
+    Never-sent questions sort first, so early on this is simply "something
+    new". Once the category has been exhausted it recycles the oldest, which
+    means the pool never runs dry and there's no round counter to keep.
+    """
+    candidates = list(rotation_questions().where(Question.type == category))
+    if not candidates:
+        return None
+
+    # Folded in Python rather than with MAX(): SQLite returns an aggregate
+    # over a datetime column as text, which wouldn't compare against the
+    # datetime.min sentinel below.
+    last_seen = {}
+    for row in Answer.select(Answer.question, Answer.sent_at).where(
+        (Answer.user == user) & Answer.parent.is_null(True)
+    ):
+        seen = last_seen.get(row.question_id)
+        if seen is None or row.sent_at > seen:
+            last_seen[row.question_id] = row.sent_at
+
+    def seen_at(question):
+        # Never sent sorts before everything, so unseen questions come first.
+        return last_seen.get(question.id) or datetime.min
+
+    oldest = min(seen_at(question) for question in candidates)
+    least_recent = [question for question in candidates if seen_at(question) == oldest]
+
+    return (rng or random).choice(least_recent)
+
+
+def next_question_for(user, rng=None):
+    """The next daily question: take the next category in the cycle and pick
+    from it. Categories with nothing in them are skipped rather than stalling,
+    so an order list can name a category before its questions exist."""
+    start = next_category_index(user)
+
+    for offset in range(len(QUESTION_CATEGORY_ORDER)):
+        index = (start + offset) % len(QUESTION_CATEGORY_ORDER)
+        question = pick_from_category(user, category_at(index), rng=rng)
+
+        if question is not None:
+            return question, index
+
+        logger.debug("No questions for category %s; skipping", category_at(index).name)
+
+    return None, None
 
 
 def pending_answer(user):
@@ -248,11 +301,11 @@ def render_question(answer):
     )
 
 
-async def send_question(bot, user, slot=None):
+async def send_question(bot, user, slot=None, rng=None):
     """Close out the previous question, then send the next one."""
     close_open_answers(user)
 
-    question = next_question_for(user)
+    question, category_index = next_question_for(user, rng=rng)
     if question is None:
         return None
 
@@ -262,6 +315,7 @@ async def send_question(bot, user, slot=None):
         sent_at=clock.now_kyiv(),
         cycle_day=user.cycle_day,
         slot=slot,
+        category_index=category_index,
     )
 
     message = await bot.send_message(

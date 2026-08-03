@@ -1,10 +1,13 @@
 """All tunable settings for the bot, in one place.
 
-This module must not import anything else from the project — everything else
-imports it, so keeping it dependency-free avoids circular imports.
+Everything else imports this module, so it must not import anything back —
+with the single exception of `app.enums`, which is itself dependency-free and
+so can't complete a cycle.
 """
 import os
 from datetime import time
+
+from app.enums import QuestionType
 
 # --- Storage ---------------------------------------------------------------
 
@@ -76,9 +79,26 @@ QUESTIONS_PER_DAY = 3
 
 # --- Questions -------------------------------------------------------------
 
-# Gap left between question `order` values so new ones can be slotted in
-# later without renumbering the whole bank.
+# Gap left between the `order` values of a question's follow-ups, so another
+# can be slotted in later without renumbering.
 QUESTION_ORDER_STEP = 10
+
+# The rhythm of the daily questions. Each send takes the next category here
+# and picks a question of that type; after the last it wraps to the first, so
+# the cycle runs continuously rather than restarting each day.
+#
+# A category may appear more than once to make it come round more often.
+# Categories with no questions yet are skipped, so it's safe to list one
+# before writing its questions.
+#
+# Note the interaction with QUESTIONS_PER_DAY: when the two lengths match,
+# every day has the same shape (emotion, then a step, then gratitude). When
+# they differ, the pattern rotates across days instead.
+QUESTION_CATEGORY_ORDER = [
+    QuestionType.EMOTION,
+    QuestionType.STEP,
+    QuestionType.GRATITUDE,
+]
 
 # How many of the most frequent emotions the statistics screen lists.
 TOP_EMOTIONS_SHOWN = 3
