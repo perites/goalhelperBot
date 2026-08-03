@@ -132,3 +132,11 @@ def admin_chat_ids():
 TIME_SLOT_PREFIX = "time_slot"
 EDIT_TIME_PREFIX = "edit_time"
 CONTINUE_ACTION = "continue"
+
+# Returns from a group of options to the top level of a question's keyboard.
+BACK_ACTION = "back"
+
+# Options shorter than this share a row, so a 1–5 scale reads as a scale
+# instead of five stacked buttons. Longer labels still get a row each.
+SHORT_OPTION_LENGTH = 12
+OPTIONS_PER_ROW = 5

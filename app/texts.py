@@ -301,6 +301,8 @@ question_answer_button = '''Відповісти'''
 
 question_skip_button = '''Пропустити це питання'''
 
+question_back_button = '''⬅️ Повернутись'''
+
 question_answer_prompt = '''
 Напиши свою відповідь одним повідомленням.
 '''
@@ -331,16 +333,13 @@ question_already_closed_message = '''
 
 intensity_options = ["1", "2", "3", "4", "5"]
 
+# ТЗ §10.1's eleven emotions, grouped so the keyboard isn't a wall. A nested
+# list is a group: the first item labels it, the rest are its choices. Only
+# the chosen emotion is stored, never the group — the grouping is a way of
+# fitting them on screen, not part of the answer.
 emotion_options = [
-    "радість",
-    "натхнення",
-    "цікавість",
-    "спокій",
-    "тривога",
-    "злість",
-    "сум",
-    "втома",
-    "розчарування",
+    ["🌱 Радше приємні", "радість", "натхнення", "цікавість", "спокій"],
+    ["🌧 Радше складні", "тривога", "злість", "сум", "втома", "розчарування"],
     "байдужість",
     "інше",
 ]

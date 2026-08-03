@@ -9,7 +9,12 @@ from datetime import timedelta
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app import clock
-from app.config import QUESTION_ORDER_STEP
+from app.config import (
+    BACK_ACTION,
+    OPTIONS_PER_ROW,
+    QUESTION_ORDER_STEP,
+    SHORT_OPTION_LENGTH,
+)
 from app.logs import get_logger
 from app.models import Answer, FinalAnswer, FinalQuestion, Question
 from app.services.slots import questions_per_slot, saved_slots
@@ -17,6 +22,7 @@ from app.texts import (
     final_questions,
     final_questions_block,
     question_answer_button,
+    question_back_button,
     question_answered_suffix,
     question_message_template,
     question_skip_button,
@@ -115,16 +121,99 @@ def close_open_answers(user):
     )
 
 
-def build_question_keyboard(question, answer):
+def is_group(option):
+    """A nested list is a group: [label, option, option, ...]."""
+    return isinstance(option, (list, tuple))
+
+
+def group_options(option):
+    """The choices inside a group, or an empty list if it only has a label."""
+    return list(option[1:]) if is_group(option) else []
+
+
+def option_at(options, path):
+    """Resolve a callback path — (index,) or (group, index) — to the option
+    text it names. Returns None for anything out of range or the wrong shape,
+    so a stale button can't index into the wrong thing."""
+    if not options:
+        return None
+
+    first, *rest = path
+
+    if first >= len(options):
+        return None
+
+    entry = options[first]
+
+    if not rest:
+        return None if is_group(entry) else entry
+
+    inner = group_options(entry)
+    index = rest[0]
+
+    return inner[index] if index < len(inner) else None
+
+
+def _option_rows(buttons):
+    """Short labels share a row so a 1–5 scale reads horizontally; anything
+    longer gets a row to itself."""
+    rows = []
+    row_is_short = False
+
+    for button in buttons:
+        short = len(button.text) <= SHORT_OPTION_LENGTH
+        can_share = short and row_is_short and rows and len(rows[-1]) < OPTIONS_PER_ROW
+
+        if can_share:
+            rows[-1].append(button)
+        else:
+            rows.append([button])
+            row_is_short = short
+
+    return rows
+
+
+def build_question_keyboard(question, answer, group=None):
+    """Top level when `group` is None, otherwise that group's choices.
+
+    Which level is showing lives entirely in the callback data, so opening a
+    group is just a keyboard swap on the same message — nothing to store and
+    nothing to lose on a restart.
+    """
     options = question.option_list
 
-    if options:
-        keyboard = [
-            [InlineKeyboardButton(option, callback_data=f"option:{answer.id}:{index}")]
-            for index, option in enumerate(options)
-        ]
-    else:
+    if not options:
         keyboard = [[InlineKeyboardButton(question_answer_button, callback_data=f"answer:{answer.id}")]]
+        keyboard.append([InlineKeyboardButton(question_skip_button, callback_data=f"skip:{answer.id}")])
+
+        return InlineKeyboardMarkup(keyboard)
+
+    if group is None:
+        buttons = []
+        for index, entry in enumerate(options):
+            if is_group(entry):
+                # A group with a label but no choices would open an empty
+                # screen, so it simply isn't offered.
+                if group_options(entry):
+                    buttons.append(
+                        InlineKeyboardButton(entry[0], callback_data=f"group:{answer.id}:{index}")
+                    )
+            else:
+                buttons.append(
+                    InlineKeyboardButton(entry, callback_data=f"option:{answer.id}:{index}")
+                )
+
+        keyboard = _option_rows(buttons)
+    else:
+        keyboard = _option_rows([
+            InlineKeyboardButton(choice, callback_data=f"option:{answer.id}:{group}:{index}")
+            for index, choice in enumerate(group_options(options[group]))
+        ])
+        keyboard.append([
+            InlineKeyboardButton(
+                question_back_button, callback_data=f"group:{answer.id}:{BACK_ACTION}"
+            )
+        ])
 
     keyboard.append([InlineKeyboardButton(question_skip_button, callback_data=f"skip:{answer.id}")])
 

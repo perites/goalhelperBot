@@ -15,6 +15,7 @@ from app.handlers.answers import (
     answer_button_handler,
     answer_text_handler,
     ask_command_handler,
+    group_button_handler,
     option_button_handler,
     skip_button_handler,
 )
@@ -66,6 +67,7 @@ def register_handlers(app):
     app.add_handler(answer_button_handler)
     app.add_handler(skip_button_handler)
     app.add_handler(option_button_handler)
+    app.add_handler(group_button_handler)
     app.add_handler(answer_text_handler)
 
     app.add_error_handler(error_handler)

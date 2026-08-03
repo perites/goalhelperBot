@@ -13,12 +13,15 @@ from telegram.ext import (
 )
 
 from app import clock
+from app.config import BACK_ACTION
 from app.enums import Status
 from app.logs import describe, get_logger
 from app.models import Answer, User
 from app.services.cycle import complete_cycle, reached_final_day, send_closing_summary
 from app.services.questions import (
+    build_question_keyboard,
     deliver_question,
+    option_at,
     send_follow_up,
     send_next_in_slot,
     pending_answer,
@@ -118,11 +121,13 @@ async def handle_skip_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.message.reply_text(question_skipped_message)
 
 
-async def handle_option_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_group_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Open a group of options, or go back to the top level. Only ever swaps
+    the keyboard — it never resolves the answer."""
     query = update.callback_query
     await query.answer()
 
-    _, answer_id, index = query.data.split(":")
+    _, answer_id, target = query.data.split(":")
 
     answer = _resolvable_answer(int(answer_id))
     if answer is None:
@@ -130,18 +135,37 @@ async def handle_option_button(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.message.reply_text(question_already_closed_message)
         return
 
-    options = answer.question.option_list
-    index = int(index)
-    if options is None or index >= len(options):
+    group = None if target == BACK_ACTION else int(target)
+
+    await query.edit_message_reply_markup(
+        reply_markup=build_question_keyboard(answer.question, answer, group=group),
+    )
+
+
+async def handle_option_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    # Two or three trailing parts: an index, or a group and an index.
+    _, answer_id, *path = query.data.split(":")
+
+    answer = _resolvable_answer(int(answer_id))
+    if answer is None:
+        await query.edit_message_reply_markup(reply_markup=None)
+        await query.message.reply_text(question_already_closed_message)
         return
 
-    answer.answer = options[index]
+    chosen = option_at(answer.question.option_list, [int(part) for part in path])
+    if chosen is None:
+        return
+
+    answer.answer = chosen
     answer.answered_at = clock.now_kyiv()
     answer.save()
 
     logger.info(
-        "user=%s chose option %s for question=%s (day %s)",
-        answer.user_id, index, answer.question_id, answer.cycle_day,
+        "user=%s chose an option for question=%s (day %s)",
+        answer.user_id, answer.question_id, answer.cycle_day,
     )
 
     # Rewriting the message also drops its buttons.
@@ -234,6 +258,7 @@ ask_command_handler = CommandHandler("ask", handle_ask_command)
 answer_button_handler = CallbackQueryHandler(handle_answer_button, pattern="^answer:")
 skip_button_handler = CallbackQueryHandler(handle_skip_button, pattern="^skip:")
 option_button_handler = CallbackQueryHandler(handle_option_button, pattern="^option:")
+group_button_handler = CallbackQueryHandler(handle_group_button, pattern="^group:")
 
 # Menu buttons arrive as plain text, so they must be excluded or they'd be
 # saved as answers.
