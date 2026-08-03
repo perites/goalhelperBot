@@ -5,12 +5,13 @@ import json
 import os
 import secrets
 from collections import Counter
-from datetime import timedelta
+from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
 from flask import (
-    Flask, abort, flash, redirect, render_template, request, Response, session, url_for,
+    Flask, abort, flash, jsonify, redirect, render_template, request, Response,
+    send_from_directory, session, url_for,
 )
 
 from app import clock, models
@@ -148,20 +149,30 @@ def register_routes(app):
     @app.route("/questions")
     @login_required
     def questions():
-        roots = (
-            Question.select()
-            .where(Question.parent.is_null(True))
-            .order_by(Question.order)
-        )
-        answered = Counter(
-            row.question_id for row in Answer.select(Answer.question)
-        )
+        """Daily questions and the closing block on one page, as two views."""
+        view = request.args.get("view", "rotation")
+
+        grouped = []
+        if view == "rotation":
+            for category in QuestionType:
+                rows = list(
+                    Question.select()
+                    .where((Question.parent.is_null(True)) & (Question.type == category))
+                    .order_by(Question.order)
+                )
+                grouped.append({
+                    "category": category,
+                    "questions": rows,
+                    "live": sum(0 if q.retired else 1 for q in rows),
+                })
 
         return render_template(
             "questions.html",
-            questions=roots,
-            answered=answered,
-            types=list(QuestionType),
+            view=view,
+            grouped=grouped,
+            final=FinalQuestion.select().order_by(FinalQuestion.order),
+            in_rotation=[int(t) for t in (current_cohort().categories if current_cohort()
+                                          else DEFAULT_CATEGORY_ORDER)],
         )
 
     @app.route("/questions/new", methods=["GET", "POST"])
@@ -176,11 +187,8 @@ def register_routes(app):
             try:
                 options = _parse_options(request.form.get("options"))
             except (ValueError, json.JSONDecodeError) as error:
-                flash(f"Options aren't valid JSON: {error}", "error")
-                return render_template(
-                    "question_form.html", question=question, types=list(QuestionType),
-                    parents=_possible_parents(question),
-                )
+                flash(f"Не вдалося прочитати варіанти: {error}", "error")
+                return redirect(url_for("question_form", question_id=question_id))
 
             parent_id = request.form.get("parent") or None
             fields = {
@@ -194,71 +202,107 @@ def register_routes(app):
 
             if question is None:
                 question = Question.create(order=_next_order(), **fields)
-                flash("Question created.", "ok")
+                flash("Питання створено.", "ok")
             else:
                 for key, value in fields.items():
                     setattr(question, key, value)
                 question.save()
-                flash("Question saved.", "ok")
+                flash("Збережено.", "ok")
 
             return redirect(url_for("questions"))
 
         return render_template(
-            "question_form.html", question=question, types=list(QuestionType),
-            parents=_possible_parents(question),
+            "question_form.html",
+            question=question,
+            types=list(QuestionType),
+            parents=[
+                {"id": q.id, "text": q.text, "type": q.type}
+                for q in Question.select().where(Question.parent.is_null(True))
+                         .order_by(Question.type, Question.order)
+                if question is None or q.id != question.id
+            ],
         )
 
-    @app.route("/questions/<int:question_id>/delete", methods=["POST"])
+    @app.route("/questions/<int:question_id>/retire", methods=["POST"])
     @login_required
-    def question_delete(question_id):
+    def question_retire(question_id):
+        """Questions are never deleted — answers reference them, and the
+        wording is part of the record of what was asked."""
         question = Question.get_or_none(Question.id == question_id)
         if question is None:
             abort(404)
 
-        # Answers point at questions, so removing one that's been asked would
-        # orphan them. Retiring keeps the history and stops it being sent.
-        if Answer.select().where(Answer.question == question).exists():
-            flash("Already answered by someone — retire it instead of deleting.", "error")
-            return redirect(url_for("questions"))
+        question.retired = not question.retired
+        question.save()
 
-        Question.delete().where(Question.parent == question).execute()
-        question.delete_instance()
-        flash("Question deleted.", "ok")
+        flash("Знято з ротації." if question.retired else "Повернуто в ротацію.", "ok")
 
         return redirect(url_for("questions"))
 
-    # --- closing questions -------------------------------------------------
-
-    @app.route("/final-questions", methods=["GET", "POST"])
+    @app.route("/questions/<int:question_id>/duplicate", methods=["POST"])
     @login_required
-    def final_questions():
-        if request.method == "POST":
-            text = request.form.get("text", "").strip()
-            if text:
-                highest = (
-                    FinalQuestion.select(FinalQuestion.order)
-                    .order_by(FinalQuestion.order.desc())
-                    .first()
-                )
-                FinalQuestion.create(text=text, order=(highest.order + 10) if highest else 10)
-                flash("Closing question added.", "ok")
+    def question_duplicate(question_id):
+        original = Question.get_or_none(Question.id == question_id)
+        if original is None:
+            abort(404)
 
-            return redirect(url_for("final_questions"))
-
-        return render_template(
-            "final_questions.html",
-            questions=FinalQuestion.select().order_by(FinalQuestion.order),
+        copy = Question.create(
+            text=original.text,
+            type=original.type,
+            options=original.options,
+            allows_free_text=original.allows_free_text,
+            parent=original.parent,
+            retired=original.retired,
+            order=_next_order(),
         )
 
-    @app.route("/final-questions/<int:question_id>/delete", methods=["POST"])
-    @login_required
-    def final_question_delete(question_id):
-        question = FinalQuestion.get_or_none(FinalQuestion.id == question_id)
-        if question is not None:
-            question.delete_instance()
-            flash("Closing question removed.", "ok")
+        # A root question is only really duplicated if its follow-ups come
+        # too, otherwise the copy behaves differently from the original.
+        for index, follow_up in enumerate(original.follow_ups, start=1):
+            Question.create(
+                text=follow_up.text,
+                type=follow_up.type,
+                options=follow_up.options,
+                allows_free_text=follow_up.allows_free_text,
+                parent=copy,
+                retired=follow_up.retired,
+                order=copy.order + index,
+            )
 
-        return redirect(url_for("final_questions"))
+        flash("Копію створено — відредагуйте її.", "ok")
+
+        return redirect(url_for("question_form", question_id=copy.id))
+
+    # --- closing questions -------------------------------------------------
+
+    @app.route("/questions/final/add", methods=["POST"])
+    @login_required
+    def final_question_add():
+        text = request.form.get("text", "").strip()
+        if text:
+            highest = (
+                FinalQuestion.select(FinalQuestion.order)
+                .order_by(FinalQuestion.order.desc())
+                .first()
+            )
+            FinalQuestion.create(text=text, order=(highest.order + 10) if highest else 10)
+            flash("Підсумкове питання додано.", "ok")
+
+        return redirect(url_for("questions", view="final"))
+
+    @app.route("/questions/final/<int:question_id>/retire", methods=["POST"])
+    @login_required
+    def final_question_retire(question_id):
+        question = FinalQuestion.get_or_none(FinalQuestion.id == question_id)
+        if question is None:
+            abort(404)
+
+        question.retired = not question.retired
+        question.save()
+
+        flash("Знято." if question.retired else "Повернуто.", "ok")
+
+        return redirect(url_for("questions", view="final"))
 
     # --- cohort ------------------------------------------------------------
 
@@ -331,25 +375,6 @@ def register_routes(app):
 
         activate_cohort(cohort)
         flash(f"«{cohort.name}» тепер активна.", "ok")
-
-        return redirect(url_for("cohorts"))
-
-    @app.route("/cohorts/<int:cohort_id>/delete", methods=["POST"])
-    @login_required
-    def cohort_delete(cohort_id):
-        cohort = Cohort.get_or_none(Cohort.id == cohort_id)
-        if cohort is None:
-            abort(404)
-
-        # Participants read their duration, daily total and category order
-        # from their cohort, so deleting one with people in it would change
-        # the programme under them.
-        if User.select().where(User.cohort == cohort).exists():
-            flash("У когорті є учасники — її не можна видалити.", "error")
-            return redirect(url_for("cohorts"))
-
-        cohort.delete_instance()
-        flash("Когорту видалено.", "ok")
 
         return redirect(url_for("cohorts"))
 
@@ -431,12 +456,62 @@ def register_routes(app):
     @login_required
     def logs():
         level = request.args.get("level") or ""
+        path = _log_path()
 
         return render_template(
             "logs.html",
             lines=_log_lines(LOG_TAIL_LINES, level=level or None),
             level=level,
-            path=Path(LOG_DIR) / LOG_FILE_NAME,
+            path=path,
+            # Where the live tail should start reading from, so it appends
+            # only what arrives after this render.
+            offset=path.stat().st_size if path.exists() else 0,
+            archives=_log_files(),
+        )
+
+    @app.route("/logs/tail")
+    @login_required
+    def logs_tail():
+        """New bytes since `offset`. Polled rather than streamed: a long-lived
+        connection would tie up a worker and has to be re-established after
+        every restart, for no gain at this size."""
+        offset = request.args.get("offset", type=int, default=0)
+        level = request.args.get("level") or None
+        path = _log_path()
+
+        if not path.exists():
+            return jsonify(offset=0, lines=[])
+
+        size = path.stat().st_size
+
+        # Midnight rotation leaves the offset past the end of a fresh file.
+        if offset > size:
+            offset = 0
+
+        with path.open("rb") as handle:
+            handle.seek(offset)
+            chunk = handle.read()
+
+        # Stop at the last newline so a half-written line isn't shown, and so
+        # the next poll doesn't start mid-character.
+        cut = chunk.rfind(b"\n") + 1
+        chunk, offset = chunk[:cut], offset + cut
+
+        lines = chunk.decode("utf-8", errors="replace").splitlines()
+        if level:
+            lines = [line for line in lines if f" {level} " in line]
+
+        return jsonify(offset=offset, lines=lines)
+
+    @app.route("/logs/download/<path:name>")
+    @login_required
+    def logs_download(name):
+        # Only ever the files we listed ourselves — never a caller-supplied path.
+        if name not in {entry["name"] for entry in _log_files()}:
+            abort(404)
+
+        return send_from_directory(
+            Path(LOG_DIR).resolve(), name, as_attachment=True, mimetype="text/plain",
         )
 
     # --- exports -----------------------------------------------------------
@@ -504,8 +579,36 @@ def _last_activity(user):
     return latest.answered_at if latest else None
 
 
+def _log_path():
+    return Path(LOG_DIR) / LOG_FILE_NAME
+
+
+def _log_files():
+    """The current log first, then whatever the nightly rotation has left
+    behind — those are named `bot.log.YYYY-MM-DD`, so newest is last by name."""
+    directory = Path(LOG_DIR)
+    if not directory.exists():
+        return []
+
+    entries = []
+    for path in sorted(directory.glob(f"{LOG_FILE_NAME}*"), reverse=True):
+        if not path.is_file():
+            continue
+
+        stat = path.stat()
+        entries.append({
+            "name": path.name,
+            "size_kb": max(1, round(stat.st_size / 1024)),
+            "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%d.%m.%Y %H:%M"),
+            "current": path.name == LOG_FILE_NAME,
+        })
+
+    entries.sort(key=lambda entry: not entry["current"])
+    return entries
+
+
 def _log_lines(count, level=None):
-    path = Path(LOG_DIR) / LOG_FILE_NAME
+    path = _log_path()
     if not path.exists():
         return []
 

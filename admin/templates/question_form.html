@@ -2,67 +2,275 @@
 {% set nav = 'questions' %}
 {% block body %}
 
-<h1>{{ 'Редагувати питання' if question else 'Нове питання' }}</h1>
+<div class="pagehead">
+  <h1>{{ 'Редагувати питання' if question else 'Нове питання' }}</h1>
+  <a href="{{ url_for('questions') }}" class="muted">← до списку</a>
+</div>
 
-<form method="post">
-  <div class="row">
-    <label>Текст</label>
-    <textarea name="text" required>{{ question.text if question else '' }}</textarea>
+<form method="post" id="question-form">
+  <input type="hidden" name="options" id="options-json"
+         value="{{ question.options if question and question.options else '' }}">
+
+  <div class="split">
+    <section class="panel">
+      <h2 class="panel-h">Питання</h2>
+
+      <div class="row">
+        <label>Текст</label>
+        <textarea name="text" required>{{ question.text if question else '' }}</textarea>
+      </div>
+
+      <div class="row">
+        <label>Категорія</label>
+        <select name="type" id="type-select">
+          {% for type in types %}
+            <option value="{{ type.value }}" {{ 'selected' if question and question.type == type.value }}>
+              {{ type.name }}</option>
+          {% endfor %}
+        </select>
+        <div class="hint">Вирішує, коли питання приходить — порядок задається в когорті.</div>
+      </div>
+
+      <div class="row">
+        <label>Уточнення до</label>
+        <select name="parent" id="parent-select"></select>
+        <div class="hint" id="parent-hint"></div>
+      </div>
+
+      <div class="row">
+        <label class="check">
+          <input type="checkbox" name="retired" {{ 'checked' if question and question.retired }}>
+          Зняти з ротації
+        </label>
+        <div class="hint">Питання не видаляються — відповіді на них залишаються в історії.</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-h">Відповідь</h2>
+
+      <div class="modes">
+        <label class="mode">
+          <input type="radio" name="answer_mode" value="open"> <span>Вільна відповідь</span>
+          <em>Учасник пише текстом</em>
+        </label>
+        <label class="mode">
+          <input type="radio" name="answer_mode" value="choice"> <span>Варіанти на вибір</span>
+          <em>Кнопки, можна групувати</em>
+        </label>
+      </div>
+
+      <div id="choice-editor" hidden>
+        <ul id="entries" class="entries"></ul>
+
+        <div class="add-row">
+          <button type="button" id="add-option" class="chip-add">+ Варіант</button>
+          <button type="button" id="add-group" class="chip-add">+ Група</button>
+        </div>
+        <div class="hint">
+          Група — це одна кнопка, за якою ховаються свої варіанти. Зручно, коли
+          варіантів багато. Перетягніть, щоб змінити порядок.
+        </div>
+
+        <label class="check" style="margin-top:14px">
+          <input type="checkbox" name="allows_free_text"
+                 {{ 'checked' if question and question.allows_free_text }}>
+          Додати кнопку «Інше (написати самому)»
+        </label>
+      </div>
+    </section>
   </div>
 
-  <div class="row">
-    <label>Категорія</label>
-    <select name="type">
-      {% for type in types %}
-        <option value="{{ type.value }}" {{ 'selected' if question and question.type == type.value }}>
-          {{ type.name }}
-        </option>
-      {% endfor %}
-    </select>
-    <div class="hint">Порядок категорій задається в «Когорта» — саме він вирішує, коли це питання прийде.</div>
+  <div class="actions">
+    <button class="primary" type="submit">Зберегти</button>
+    <a href="{{ url_for('questions') }}" class="muted" style="margin-left:12px">Скасувати</a>
   </div>
-
-  <div class="row">
-    <label>Варіанти відповіді (JSON)</label>
-    <textarea name="options" placeholder='["радість", "спокій"]  або  [["Приємні", "радість", "спокій"], "інше"]'>{{ question.options if question and question.options else '' }}</textarea>
-    <div class="hint">
-      Порожньо — питання з вільною відповіддю. Вкладений список — це група:
-      перший елемент є назвою кнопки, решта відкриваються за нею.
-    </div>
-  </div>
-
-  <div class="row">
-    <label>Уточнення до</label>
-    <select name="parent">
-      <option value="">— це звичайне питання —</option>
-      {% for candidate in parents %}
-        <option value="{{ candidate.id }}"
-          {{ 'selected' if question and question.parent_id == candidate.id }}>
-          {{ candidate.text[:70] }}
-        </option>
-      {% endfor %}
-    </select>
-    <div class="hint">Уточнення приходить після відповіді на своє питання і ніколи не потрапляє в ротацію.</div>
-  </div>
-
-  <div class="row">
-    <label>
-      <input type="checkbox" name="allows_free_text" style="min-width:auto"
-        {{ 'checked' if question and question.allows_free_text }}>
-      Дозволити «Інше (написати самому)»
-    </label>
-  </div>
-
-  <div class="row">
-    <label>
-      <input type="checkbox" name="retired" style="min-width:auto"
-        {{ 'checked' if question and question.retired }}>
-      Зняти з ротації (відповіді зберігаються)
-    </label>
-  </div>
-
-  <button class="primary" type="submit">Зберегти</button>
-  <a href="{{ url_for('questions') }}" class="muted" style="margin-left:12px">Скасувати</a>
 </form>
+
+<script>
+  const PARENTS   = {{ parents | tojson }};
+  const CURRENT   = {{ (question.parent_id if question and question.parent_id else 0) | tojson }};
+  const TYPE_NAMES = {{ types | map(attribute='name') | list | tojson }};
+
+  const typeSel   = document.getElementById('type-select');
+  const parentSel = document.getElementById('parent-select');
+  const parentHint = document.getElementById('parent-hint');
+
+  // --- parent list, filtered by the selected category ---------------------
+  function renderParents() {
+    const type = Number(typeSel.value);
+    const chosen = Number(parentSel.value || CURRENT || 0);
+
+    // Anything of this category, plus whatever is already linked — dropping
+    // a mismatched parent silently would quietly unlink the question.
+    const matching = PARENTS.filter(p => p.type === type || p.id === CURRENT);
+
+    parentSel.innerHTML = '<option value="">— це звичайне питання —</option>' +
+      matching.map(p =>
+        '<option value="' + p.id + '"' + (p.id === chosen ? ' selected' : '') + '>' +
+        p.text.slice(0, 70) + (p.type !== type ? ' — ' + TYPE_NAMES[p.type] : '') +
+        '</option>').join('');
+
+    parentHint.textContent = matching.length
+      ? 'Показані питання категорії ' + TYPE_NAMES[type] + '. Уточнення приходить після відповіді на своє питання.'
+      : 'У категорії ' + TYPE_NAMES[type] + ' поки немає питань, до яких можна прикріпити уточнення.';
+  }
+
+  typeSel.addEventListener('change', renderParents);
+
+  // --- answer options -----------------------------------------------------
+  const hidden   = document.getElementById('options-json');
+  const editor   = document.getElementById('choice-editor');
+  const listEl   = document.getElementById('entries');
+  const modeInputs = document.querySelectorAll('input[name=answer_mode]');
+
+  let entries = [];
+  let dragFrom = null;
+
+  try {
+    const parsed = hidden.value ? JSON.parse(hidden.value) : [];
+    entries = parsed.map(entry => Array.isArray(entry)
+      ? { kind: 'group', label: entry[0] || '', options: entry.slice(1) }
+      : { kind: 'option', text: entry });
+  } catch (error) { entries = []; }
+
+  function mode() {
+    return document.querySelector('input[name=answer_mode]:checked').value;
+  }
+
+  function serialise() {
+    if (mode() === 'open') { hidden.value = ''; return; }
+
+    const cleaned = entries.map(entry => entry.kind === 'group'
+      ? [entry.label.trim(), ...entry.options.map(o => o.trim()).filter(Boolean)]
+      : entry.text.trim()
+    ).filter(entry => Array.isArray(entry) ? entry[0] && entry.length > 1 : entry);
+
+    hidden.value = cleaned.length ? JSON.stringify(cleaned) : '';
+  }
+
+  function field(value, placeholder, onInput) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = value;
+    input.placeholder = placeholder;
+    input.addEventListener('input', () => { onInput(input.value); serialise(); });
+    return input;
+  }
+
+  function removeButton(onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'rm';
+    button.textContent = '×';
+    button.title = 'Прибрати';
+    button.onclick = onClick;
+    return button;
+  }
+
+  function render() {
+    listEl.innerHTML = '';
+
+    entries.forEach((entry, index) => {
+      const item = document.createElement('li');
+      item.className = 'entry ' + entry.kind;
+      item.draggable = true;
+
+      const head = document.createElement('div');
+      head.className = 'entry-head';
+
+      const grip = document.createElement('span');
+      grip.className = 'grip';
+      grip.textContent = '⠿';
+      head.appendChild(grip);
+
+      if (entry.kind === 'group') {
+        const badge = document.createElement('span');
+        badge.className = 'tag';
+        badge.textContent = 'група';
+        head.appendChild(badge);
+        head.appendChild(field(entry.label, 'Назва кнопки', v => entry.label = v));
+      } else {
+        head.appendChild(field(entry.text, 'Текст варіанта', v => entry.text = v));
+      }
+
+      head.appendChild(removeButton(() => { entries.splice(index, 1); render(); }));
+      item.appendChild(head);
+
+      if (entry.kind === 'group') {
+        const inner = document.createElement('div');
+        inner.className = 'entry-inner';
+
+        entry.options.forEach((option, optionIndex) => {
+          const row = document.createElement('div');
+          row.className = 'entry-sub';
+          row.appendChild(field(option, 'Варіант у групі',
+            v => entry.options[optionIndex] = v));
+          row.appendChild(removeButton(() => {
+            entry.options.splice(optionIndex, 1); render();
+          }));
+          inner.appendChild(row);
+        });
+
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'chip-add';
+        add.textContent = '+ варіант у групу';
+        add.onclick = () => { entry.options.push(''); render(); };
+        inner.appendChild(add);
+
+        item.appendChild(inner);
+      }
+
+      item.addEventListener('dragstart', () => { dragFrom = index; item.classList.add('dragging'); });
+      item.addEventListener('dragend',   () => { dragFrom = null; item.classList.remove('dragging'); });
+      item.addEventListener('dragover',  event => { event.preventDefault(); item.classList.add('over'); });
+      item.addEventListener('dragleave', () => item.classList.remove('over'));
+      item.addEventListener('drop', event => {
+        event.preventDefault();
+        item.classList.remove('over');
+        if (dragFrom === null || dragFrom === index) return;
+        const [moved] = entries.splice(dragFrom, 1);
+        entries.splice(index, 0, moved);
+        render();
+      });
+
+      listEl.appendChild(item);
+    });
+
+    if (!entries.length) {
+      listEl.innerHTML = '<li class="entry-empty">Жодного варіанта — додайте нижче.</li>';
+    }
+
+    serialise();
+  }
+
+  function applyMode() {
+    const choice = mode() === 'choice';
+    editor.hidden = !choice;
+    serialise();
+  }
+
+  modeInputs.forEach(input => input.addEventListener('change', () => {
+    if (input.value === 'choice' && !entries.length) entries.push({ kind: 'option', text: '' });
+    applyMode();
+    render();
+  }));
+
+  document.getElementById('add-option').onclick = () => {
+    entries.push({ kind: 'option', text: '' }); render();
+  };
+  document.getElementById('add-group').onclick = () => {
+    entries.push({ kind: 'group', label: '', options: [''] }); render();
+  };
+
+  // Existing options mean this is a choice question; anything else is open.
+  document.querySelector('input[name=answer_mode][value=' +
+    (entries.length ? 'choice' : 'open') + ']').checked = true;
+
+  renderParents();
+  applyMode();
+  render();
+</script>
 
 {% endblock %}

@@ -28,10 +28,6 @@
           <button>Зробити активною</button>
         </form>
         {% endif %}
-        <form method="post" action="{{ url_for('cohort_delete', cohort_id=row.cohort.id) }}" class="inline"
-              onsubmit="return confirm('Видалити «{{ row.cohort.name }}»?')">
-          <button class="danger">Видалити</button>
-        </form>
       </div>
     </div>
 

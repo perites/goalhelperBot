@@ -527,7 +527,11 @@ async def send_closing_block(bot, user):
     indefinitely until the user replies."""
     close_open_answers(user)
 
-    questions = [q.text for q in FinalQuestion.select().order_by(FinalQuestion.order)]
+    questions = [
+        q.text for q in FinalQuestion.select()
+        .where(FinalQuestion.retired == False)  # noqa: E712
+        .order_by(FinalQuestion.order)
+    ]
     if not questions:
         logger.warning("Closing block requested but no closing questions exist")
         return None

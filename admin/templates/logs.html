@@ -2,7 +2,13 @@
 {% set nav = 'logs' %}
 {% block body %}
 
-<h1>Логи</h1>
+<div class="pagehead">
+  <h1>Логи</h1>
+  {% if archives %}
+  <a href="{{ url_for('logs_download', name=path.name) }}">
+    <button class="primary">Завантажити поточний</button></a>
+  {% endif %}
+</div>
 
 <div class="toolbar">
   <form method="get">
@@ -13,14 +19,88 @@
       {% endfor %}
     </select>
   </form>
-  <span class="muted">{{ path }}</span>
+  <label class="check"><input type="checkbox" id="live" checked> Стежити наживо</label>
+  <span class="muted small" id="tail-state" style="margin-left:auto">{{ path }}</span>
 </div>
 
-{% if lines %}
-<pre>{% for line in lines %}{{ line }}
-{% endfor %}</pre>
-{% else %}
-<p class="muted">Порожньо.</p>
-{% endif %}
+<pre id="log" class="logbox">{% for line in lines %}{{ line }}
+{% endfor %}{% if not lines %}Порожньо.{% endif %}</pre>
+
+<section class="panel" style="margin-top:16px">
+  <h2 class="panel-h">Файли</h2>
+  <ul class="qlist">
+  {% for file in archives %}
+    <li class="qitem">
+      <div class="qmain">
+        <span class="qtext">{{ file.name }}</span>
+        <div class="qmeta">
+          {% if file.current %}<span class="tag on">поточний</span>{% endif %}
+          <span class="tag">{{ file.size_kb }} КБ</span>
+          <span class="tag">{{ file.modified }}</span>
+        </div>
+      </div>
+      <div class="qactions">
+        <a href="{{ url_for('logs_download', name=file.name) }}">
+          <button>Завантажити</button></a>
+      </div>
+    </li>
+  {% else %}
+    <li class="qitem"><span class="muted">Файлів ще немає.</span></li>
+  {% endfor %}
+  </ul>
+  <div class="hint">Ротація опівночі, зберігаються останні 30 днів.</div>
+</section>
+
+<script>
+  const box   = document.getElementById('log');
+  const live  = document.getElementById('live');
+  const state = document.getElementById('tail-state');
+  const LEVEL = {{ level | tojson }};
+  const PATH  = {{ path | string | tojson }};
+
+  let offset = {{ offset | tojson }};
+  let empty  = {{ (not lines) | tojson }};
+
+  box.scrollTop = box.scrollHeight;
+
+  // Only follow the tail while the reader is already at the bottom — otherwise
+  // arriving lines would yank the view away from whatever they were reading.
+  function atBottom() {
+    return box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  }
+
+  function append(lines) {
+    const stick = atBottom();
+
+    if (empty) { box.textContent = ''; empty = false; }
+    box.textContent += lines.join('\n') + '\n';
+
+    if (stick) box.scrollTop = box.scrollHeight;
+  }
+
+  async function poll() {
+    if (!live.checked) return;
+
+    try {
+      const url = '{{ url_for("logs_tail") }}?offset=' + offset +
+                  (LEVEL ? '&level=' + encodeURIComponent(LEVEL) : '');
+      const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!response.ok) throw new Error(response.status);
+
+      const data = await response.json();
+      offset = data.offset;
+      if (data.lines.length) append(data.lines);
+
+      state.textContent = PATH;
+      state.style.color = '';
+    } catch (error) {
+      state.textContent = 'немає зв’язку з панеллю';
+      state.style.color = 'var(--warn)';
+    }
+  }
+
+  setInterval(poll, 3000);
+  live.addEventListener('change', () => { if (live.checked) poll(); });
+</script>
 
 {% endblock %}

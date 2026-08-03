@@ -61,6 +61,8 @@
   pre { background:var(--panel); border:1px solid var(--line); border-radius:8px;
         padding:12px; overflow-x:auto; font-size:12.5px; line-height:1.5;
         white-space:pre-wrap; word-break:break-word; }
+  pre.logbox { height:min(62vh,640px); overflow-y:auto; margin:0;
+               scrollbar-color:var(--line) transparent; }
   .muted { color:var(--muted); }
   .small { font-size:13px; }
   .inline { display:inline; }
@@ -119,6 +121,58 @@
   .day .dn { color:var(--muted); font-size:12px; min-width:62px; }
   .chip { font-size:12px; padding:2px 9px; border-radius:99px;
           background:#1b2333; border:1px solid #2a3550; color:#a9bde3; }
+
+  /* --- tabs --- */
+  .tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:18px; }
+  .tab { padding:8px 15px; color:var(--muted); border-bottom:2px solid transparent;
+         margin-bottom:-1px; }
+  .tab:hover { color:var(--text); text-decoration:none; }
+  .tab.on { color:var(--text); border-bottom-color:var(--accent); }
+  .lead { margin:-4px 0 18px; max-width:70ch; }
+
+  /* --- question list --- */
+  .qlist { list-style:none; margin:0; padding:0; }
+  .qitem { display:flex; align-items:flex-start; justify-content:space-between; gap:14px;
+           padding:11px 0; border-bottom:1px solid var(--line); }
+  .qitem:last-child { border-bottom:none; padding-bottom:0; }
+  .qitem.sub { padding-left:20px; }
+  .qitem.is-retired .qtext { color:var(--muted); text-decoration:line-through; }
+  .qmain { min-width:0; }
+  .qtext { display:inline-block; }
+  .qmeta { display:flex; gap:6px; flex-wrap:wrap; margin-top:5px; }
+  .qactions { display:flex; gap:6px; flex-shrink:0; }
+  .qactions button { font-size:12px; padding:4px 10px; }
+  .branch { color:var(--muted); margin-right:5px; }
+
+  /* --- answer mode + options builder --- */
+  .modes { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+  .mode { background:#10121a; border:1px solid var(--line); border-radius:8px;
+          padding:11px 13px; cursor:pointer; display:block; }
+  .mode:has(input:checked) { border-color:var(--accent); background:#151a26; }
+  .mode input { min-width:auto; margin-right:6px; }
+  .mode span { font-size:14px; }
+  .mode em { display:block; color:var(--muted); font-size:12px; font-style:normal;
+             margin-top:3px; margin-left:22px; }
+  .check { display:flex; align-items:center; gap:8px; color:var(--text);
+           font-size:14px; margin-bottom:0; }
+  .check input { min-width:auto; }
+  .entries { list-style:none; margin:0 0 12px; padding:0;
+             display:flex; flex-direction:column; gap:8px; }
+  .entry { background:#10121a; border:1px solid var(--line); border-radius:8px; padding:9px; }
+  .entry.group { border-color:#2a3550; }
+  .entry.dragging { opacity:.4; }
+  .entry.over { border-color:var(--accent); }
+  .entry-head { display:flex; align-items:center; gap:8px; }
+  .entry-head input { flex:1; min-width:0; }
+  .entry-head .grip { cursor:grab; color:var(--muted); }
+  .entry-inner { margin:9px 0 0 26px; display:flex; flex-direction:column; gap:6px;
+                 border-left:1px solid var(--line); padding-left:12px; }
+  .entry-sub { display:flex; align-items:center; gap:8px; }
+  .entry-sub input { flex:1; min-width:0; }
+  .entry-empty { color:var(--muted); font-size:13px; padding:6px 2px; }
+  .rm { background:none; border:none; color:var(--muted); font-size:17px;
+        line-height:1; padding:0 5px; cursor:pointer; }
+  .rm:hover { color:var(--bad); }
 </style>
 </head>
 <body>
@@ -127,7 +181,6 @@
   <nav>
     <a href="{{ url_for('dashboard') }}" class="{{ 'on' if nav=='dashboard' }}">Огляд</a>
     <a href="{{ url_for('questions') }}" class="{{ 'on' if nav=='questions' }}">Питання</a>
-    <a href="{{ url_for('final_questions') }}" class="{{ 'on' if nav=='final' }}">Підсумкові</a>
     <a href="{{ url_for('cohorts') }}" class="{{ 'on' if nav=='cohort' }}">Когорти</a>
     <a href="{{ url_for('users') }}" class="{{ 'on' if nav=='users' }}">Учасники</a>
     <a href="{{ url_for('logs') }}" class="{{ 'on' if nav=='logs' }}">Логи</a>

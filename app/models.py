@@ -234,6 +234,10 @@ class FinalQuestion(BaseModel):
     text = TextField()
     order = IntegerField(unique=True)
 
+    # Withdrawn without being deleted, so the wording stays on record next to
+    # the blocks that were already sent using it.
+    retired = BooleanField(default=False)
+
 
 class FinalAnswer(BaseModel):
     """One row per user: their single reply to the whole closing block."""

@@ -2,52 +2,138 @@
 {% set nav = 'questions' %}
 {% block body %}
 
-<h1>Питання</h1>
-
-<div class="toolbar">
-  <a href="{{ url_for('question_form') }}"><button class="primary">Додати питання</button></a>
-  <span class="muted">Уточнення показані під своїм питанням і ніколи не приходять самі.</span>
+<div class="pagehead">
+  <h1>Питання</h1>
+  {% if view == 'rotation' %}
+    <a href="{{ url_for('question_form') }}"><button class="primary">Нове питання</button></a>
+  {% endif %}
 </div>
 
-<table>
-  <tr>
-    <th>Текст</th><th>Категорія</th><th>Варіанти</th><th>Відповідей</th><th></th>
-  </tr>
-  {% for question in questions %}
-  <tr>
-    <td>
-      <a href="{{ url_for('question_form', question_id=question.id) }}">{{ question.text }}</a>
-      {% if question.retired %}<span class="tag bad">знято</span>{% endif %}
-      {% if question.allows_free_text %}<span class="tag">своя відповідь</span>{% endif %}
-    </td>
-    <td class="muted">{{ question.type_name }}</td>
-    <td class="muted">{{ question.option_count }}</td>
-    <td class="muted">{{ answered.get(question.id, 0) }}</td>
-    <td>
-      <form method="post" action="{{ url_for('question_delete', question_id=question.id) }}" class="inline"
-            onsubmit="return confirm('Видалити це питання?')">
-        <button class="danger">Видалити</button>
-      </form>
-    </td>
-  </tr>
-    {% for follow_up in question.follow_ups %}
-    <tr>
-      <td style="padding-left:26px">
-        ↳ <a href="{{ url_for('question_form', question_id=follow_up.id) }}">{{ follow_up.text }}</a>
-        {% if follow_up.retired %}<span class="tag bad">знято</span>{% endif %}
-      </td>
-      <td class="muted">{{ follow_up.type_name }}</td>
-      <td class="muted">{{ follow_up.option_count }}</td>
-      <td class="muted">{{ answered.get(follow_up.id, 0) }}</td>
-      <td>
-        <form method="post" action="{{ url_for('question_delete', question_id=follow_up.id) }}" class="inline"
-              onsubmit="return confirm('Видалити це уточнення?')">
-          <button class="danger">Видалити</button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
+<div class="tabs">
+  <a href="{{ url_for('questions') }}" class="tab {{ 'on' if view == 'rotation' }}">Щоденні</a>
+  <a href="{{ url_for('questions', view='final') }}" class="tab {{ 'on' if view == 'final' }}">Підсумкові</a>
+</div>
+
+{% if view == 'rotation' %}
+
+  <p class="muted lead">
+    Категорія вирішує, коли питання прийде — порядок задається в
+    <a href="{{ url_for('cohorts') }}">когорті</a>. Уточнення показані під своїм питанням
+    і ніколи не приходять самі.
+  </p>
+
+  <div class="stack">
+  {% for group in grouped %}
+    {% if group.questions %}
+    <section class="panel {{ 'accented' if group.category.value in in_rotation }}">
+      <div class="panel-head">
+        <div>
+          <span class="panel-title">{{ group.category.name }}</span>
+          {% if group.category.value in in_rotation %}
+            <span class="tag on">у ротації</span>
+          {% else %}
+            <span class="tag">не в ротації когорти</span>
+          {% endif %}
+          <span class="tag">{{ group.live }} з {{ group.questions | length }}</span>
+        </div>
+      </div>
+
+      <ul class="qlist">
+      {% for question in group.questions %}
+        <li class="qitem {{ 'is-retired' if question.retired }}">
+          <div class="qmain">
+            <a href="{{ url_for('question_form', question_id=question.id) }}" class="qtext">
+              {{ question.text }}</a>
+            <div class="qmeta">
+              {% if question.retired %}<span class="tag bad">знято</span>{% endif %}
+              {% if question.option_count %}
+                <span class="tag">{{ question.option_count }} варіантів</span>
+              {% else %}
+                <span class="tag">вільна відповідь</span>
+              {% endif %}
+              {% if question.allows_free_text %}<span class="tag">+ своя</span>{% endif %}
+            </div>
+          </div>
+          <div class="qactions">
+            <form method="post" action="{{ url_for('question_duplicate', question_id=question.id) }}" class="inline">
+              <button title="Створити копію">Дублювати</button>
+            </form>
+            <form method="post" action="{{ url_for('question_retire', question_id=question.id) }}" class="inline">
+              <button class="{{ '' if question.retired else 'danger' }}">
+                {{ 'Повернути' if question.retired else 'Зняти' }}</button>
+            </form>
+          </div>
+        </li>
+
+        {% for follow_up in question.follow_ups %}
+        <li class="qitem sub {{ 'is-retired' if follow_up.retired }}">
+          <div class="qmain">
+            <span class="branch">↳</span>
+            <a href="{{ url_for('question_form', question_id=follow_up.id) }}" class="qtext">
+              {{ follow_up.text }}</a>
+            <div class="qmeta">
+              {% if follow_up.retired %}<span class="tag bad">знято</span>{% endif %}
+              {% if follow_up.option_count %}
+                <span class="tag">{{ follow_up.option_count }} варіантів</span>
+              {% else %}
+                <span class="tag">вільна відповідь</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="qactions">
+            <form method="post" action="{{ url_for('question_duplicate', question_id=follow_up.id) }}" class="inline">
+              <button title="Копія під тим самим питанням">Дублювати</button>
+            </form>
+            <form method="post" action="{{ url_for('question_retire', question_id=follow_up.id) }}" class="inline">
+              <button class="{{ '' if follow_up.retired else 'danger' }}">
+                {{ 'Повернути' if follow_up.retired else 'Зняти' }}</button>
+            </form>
+          </div>
+        </li>
+        {% endfor %}
+      {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
   {% endfor %}
-</table>
+  </div>
+
+{% else %}
+
+  <p class="muted lead">
+    Приходять одним повідомленням в останній день циклу, одразу після відповіді
+    на питання дня. Учасник відповідає на всі разом, одним текстом.
+  </p>
+
+  <section class="panel">
+    <ul class="qlist">
+    {% for question in final %}
+      <li class="qitem {{ 'is-retired' if question.retired }}">
+        <div class="qmain">
+          <span class="qtext">{{ question.text }}</span>
+          {% if question.retired %}<div class="qmeta"><span class="tag bad">знято</span></div>{% endif %}
+        </div>
+        <div class="qactions">
+          <form method="post" action="{{ url_for('final_question_retire', question_id=question.id) }}" class="inline">
+            <button class="{{ '' if question.retired else 'danger' }}">
+              {{ 'Повернути' if question.retired else 'Зняти' }}</button>
+          </form>
+        </div>
+      </li>
+    {% else %}
+      <li class="qitem"><span class="muted">Ще жодного.</span></li>
+    {% endfor %}
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel-h">Додати підсумкове питання</h2>
+    <form method="post" action="{{ url_for('final_question_add') }}">
+      <div class="row"><textarea name="text" required></textarea></div>
+      <button class="primary" type="submit">Додати</button>
+    </form>
+  </section>
+
+{% endif %}
 
 {% endblock %}
