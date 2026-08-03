@@ -1,0 +1,30 @@
+{# Permanent deletion. `reason` is the blocker text from services/deletion.py,
+   or empty when the row may go. The button is only ever a courtesy — the route
+   re-checks the same rule before deleting anything. #}
+{% macro delete_button(action, reason, confirm) %}
+  {% if reason %}
+    <button class="danger" disabled title="{{ reason }}">Видалити</button>
+  {% else %}
+    <form method="post" action="{{ action }}" class="inline"
+          onsubmit='return confirm({{ confirm | tojson }})'>
+      <button class="danger">Видалити</button>
+    </form>
+  {% endif %}
+{% endmacro %}
+
+{# The same decision spelled out, for pages with room to explain it. #}
+{% macro delete_panel(action, reason, confirm, hint) %}
+<section class="panel danger-zone">
+  <h2 class="panel-h">Видалення</h2>
+  {% if reason %}
+    <p class="muted" style="margin:0 0 12px">{{ reason }}</p>
+    <button class="danger" disabled>Видалити назавжди</button>
+  {% else %}
+    <p class="muted" style="margin:0 0 12px">{{ hint }}</p>
+    <form method="post" action="{{ action }}"
+          onsubmit='return confirm({{ confirm | tojson }})'>
+      <button class="danger">Видалити назавжди</button>
+    </form>
+  {% endif %}
+</section>
+{% endmacro %}

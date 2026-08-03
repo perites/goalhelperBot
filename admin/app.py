@@ -29,6 +29,15 @@ from app.services.cohort import (
     activate_cohort, current_cohort, enrollment_state, seats_left, seats_taken,
 )
 from app.services.cycle import finish_user, pause_user, resume_user
+from app.services.deletion import (
+    DeletionBlocked,
+    cohort_blocker,
+    delete_cohort,
+    delete_final_question,
+    delete_question,
+    final_question_blocker,
+    question_blocker,
+)
 from app.services.slots import format_slots, saved_slots
 from app.services.stats import answered_count, skipped_count, top_emotions
 
@@ -166,11 +175,19 @@ def register_routes(app):
                     "live": sum(0 if q.retired else 1 for q in rows),
                 })
 
+        final = list(FinalQuestion.select().order_by(FinalQuestion.order))
+
         return render_template(
             "questions.html",
             view=view,
             grouped=grouped,
-            final=FinalQuestion.select().order_by(FinalQuestion.order),
+            final=final,
+            # Why each row can't be deleted, keyed by id — the same functions
+            # the delete routes enforce with.
+            blocked={q.id: question_blocker(q) for group in grouped
+                     for root in group["questions"]
+                     for q in (root, *root.follow_ups)},
+            final_blocked={q.id: final_question_blocker(q) for q in final},
             in_rotation=[int(t) for t in (current_cohort().categories if current_cohort()
                                           else DEFAULT_CATEGORY_ORDER)],
         )
@@ -221,6 +238,7 @@ def register_routes(app):
                          .order_by(Question.type, Question.order)
                 if question is None or q.id != question.id
             ],
+            blocked=question_blocker(question) if question else None,
         )
 
     @app.route("/questions/<int:question_id>/retire", methods=["POST"])
@@ -236,6 +254,24 @@ def register_routes(app):
         question.save()
 
         flash("Знято з ротації." if question.retired else "Повернуто в ротацію.", "ok")
+
+        return redirect(url_for("questions"))
+
+    @app.route("/questions/<int:question_id>/delete", methods=["POST"])
+    @login_required
+    def question_delete(question_id):
+        """Only for questions nobody has seen yet — see services/deletion.py."""
+        question = Question.get_or_none(Question.id == question_id)
+        if question is None:
+            abort(404)
+
+        try:
+            delete_question(question)
+        except DeletionBlocked as blocked:
+            flash(f"Питання не видалено. {blocked}", "error")
+            return redirect(url_for("question_form", question_id=question_id))
+
+        flash("Питання видалено.", "ok")
 
         return redirect(url_for("questions"))
 
@@ -304,6 +340,22 @@ def register_routes(app):
 
         return redirect(url_for("questions", view="final"))
 
+    @app.route("/questions/final/<int:question_id>/delete", methods=["POST"])
+    @login_required
+    def final_question_delete(question_id):
+        question = FinalQuestion.get_or_none(FinalQuestion.id == question_id)
+        if question is None:
+            abort(404)
+
+        try:
+            delete_final_question(question)
+        except DeletionBlocked as blocked:
+            flash(f"Питання не видалено. {blocked}", "error")
+        else:
+            flash("Підсумкове питання видалено.", "ok")
+
+        return redirect(url_for("questions", view="final"))
+
     # --- cohort ------------------------------------------------------------
 
     @app.route("/cohorts")
@@ -318,6 +370,7 @@ def register_routes(app):
                 "running": User.select().where(
                     (User.cohort == cohort) & (User.status == Status.ACTIVE)
                 ).count(),
+                "blocked": cohort_blocker(cohort),
             })
 
         return render_template("cohorts.html", rows=rows)
@@ -364,7 +417,26 @@ def register_routes(app):
                   [int(t) for t in DEFAULT_CATEGORY_ORDER],
             statuses=list(CohortStatus),
             default_days=CYCLE_LENGTH_DAYS,
+            blocked=cohort_blocker(cohort) if cohort else None,
         )
+
+    @app.route("/cohorts/<int:cohort_id>/delete", methods=["POST"])
+    @login_required
+    def cohort_delete(cohort_id):
+        """Only for cohorts nobody has joined — see services/deletion.py."""
+        cohort = Cohort.get_or_none(Cohort.id == cohort_id)
+        if cohort is None:
+            abort(404)
+
+        try:
+            delete_cohort(cohort)
+        except DeletionBlocked as blocked:
+            flash(f"Когорту не видалено. {blocked}", "error")
+            return redirect(url_for("cohort_form", cohort_id=cohort_id))
+
+        flash(f"Когорту «{cohort.name}» видалено.", "ok")
+
+        return redirect(url_for("cohorts"))
 
     @app.route("/cohorts/<int:cohort_id>/activate", methods=["POST"])
     @login_required

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import delete_button %}
 {% set nav = 'cohort' %}
 {% block body %}
 
@@ -28,6 +29,10 @@
           <button>Зробити активною</button>
         </form>
         {% endif %}
+        {{ delete_button(
+             url_for('cohort_delete', cohort_id=row.cohort.id),
+             row.blocked,
+             'Видалити когорту «' ~ row.cohort.name ~ '» назавжди? Дію не можна скасувати.') }}
       </div>
     </div>
 

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import delete_button %}
 {% set nav = 'questions' %}
 {% block body %}
 
@@ -62,6 +63,10 @@
               <button class="{{ '' if question.retired else 'danger' }}">
                 {{ 'Повернути' if question.retired else 'Зняти' }}</button>
             </form>
+            {{ delete_button(
+                 url_for('question_delete', question_id=question.id),
+                 blocked[question.id],
+                 'Видалити це питання назавжди? Дію не можна скасувати.') }}
           </div>
         </li>
 
@@ -88,6 +93,10 @@
               <button class="{{ '' if follow_up.retired else 'danger' }}">
                 {{ 'Повернути' if follow_up.retired else 'Зняти' }}</button>
             </form>
+            {{ delete_button(
+                 url_for('question_delete', question_id=follow_up.id),
+                 blocked[follow_up.id],
+                 'Видалити це уточнення назавжди? Дію не можна скасувати.') }}
           </div>
         </li>
         {% endfor %}
@@ -111,13 +120,22 @@
       <li class="qitem {{ 'is-retired' if question.retired }}">
         <div class="qmain">
           <span class="qtext">{{ question.text }}</span>
-          {% if question.retired %}<div class="qmeta"><span class="tag bad">знято</span></div>{% endif %}
+          <div class="qmeta">
+            {% if question.retired %}<span class="tag bad">знято</span>{% endif %}
+            {% if final_blocked[question.id] %}
+              <span class="muted small">{{ final_blocked[question.id] }}</span>
+            {% endif %}
+          </div>
         </div>
         <div class="qactions">
           <form method="post" action="{{ url_for('final_question_retire', question_id=question.id) }}" class="inline">
             <button class="{{ '' if question.retired else 'danger' }}">
               {{ 'Повернути' if question.retired else 'Зняти' }}</button>
           </form>
+          {{ delete_button(
+               url_for('final_question_delete', question_id=question.id),
+               final_blocked[question.id],
+               'Видалити це підсумкове питання назавжди? Дію не можна скасувати.') }}
         </div>
       </li>
     {% else %}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import delete_panel %}
 {% set nav = 'cohort' %}
 {% block body %}
 
@@ -96,6 +97,16 @@
     <a href="{{ url_for('cohorts') }}" class="muted" style="margin-left:12px">Скасувати</a>
   </div>
 </form>
+
+{% if cohort %}
+  {{ delete_panel(
+       url_for('cohort_delete', cohort_id=cohort.id),
+       blocked,
+       'Видалити когорту «' ~ cohort.name ~ '» назавжди? Дію не можна скасувати.',
+       'До цієї когорти ще ніхто не приєднався, тож видалення нічого за собою
+        не потягне. Когорту з учасниками не видаляють — переведіть її у статус
+        ENDED, і вона лишиться в історії разом з їхніми відповідями.') }}
+{% endif %}
 
 <script>
   const TYPES = {{ types | map(attribute='value') | list | tojson }};
