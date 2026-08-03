@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% set nav = 'cohort' %}
+{% block body %}
+
+<div class="pagehead">
+  <h1>{{ cohort.name if cohort else 'Нова когорта' }}</h1>
+  <a href="{{ url_for('cohorts') }}" class="muted">← до списку</a>
+</div>
+
+<form method="post" id="cohort-form">
+  <input type="hidden" name="category_order" id="category-order" value="{{ order | join(',') }}">
+
+  <div class="split">
+    <section class="panel">
+      <h2 class="panel-h">Основне</h2>
+
+      <div class="row">
+        <label>Назва</label>
+        <input type="text" name="name" value="{{ cohort.name if cohort else 'Пілот' }}" required>
+      </div>
+
+      <div class="pair">
+        <div class="row">
+          <label>Набір відкритий з</label>
+          <input type="date" name="enrollment_opens"
+                 value="{{ cohort.enrollment_opens if cohort else '' }}" required>
+        </div>
+        <div class="row">
+          <label>до</label>
+          <input type="date" name="enrollment_closes"
+                 value="{{ cohort.enrollment_closes if cohort else '' }}" required>
+        </div>
+      </div>
+
+      <div class="pair">
+        <div class="row">
+          <label>Місць</label>
+          <input type="number" name="max_people" min="1"
+                 value="{{ cohort.max_people if cohort else 10 }}" required>
+        </div>
+        <div class="row">
+          <label>Тривалість циклу, днів</label>
+          <input type="number" name="duration_days" min="1"
+                 value="{{ cohort.duration_days if cohort else default_days }}" required>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Статус</label>
+        <select name="status">
+          {% for status in statuses %}
+            <option value="{{ status.value }}"
+              {{ 'selected' if cohort and cohort.status == status.value }}>{{ status.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-h">Ритм питань</h2>
+
+      <div class="row">
+        <label>Питань на день</label>
+        <input type="number" name="questions_per_day" id="per-day" min="1"
+               value="{{ cohort.questions_per_day if cohort else 3 }}" required>
+        <div class="hint">
+          Розподіляється між часами, які обрав учасник. Кожен обраний час отримує
+          щонайменше одне питання, тож при більшій кількості часів денна сума зросте.
+        </div>
+      </div>
+
+      <label class="small muted">Порядок категорій — перетягніть, щоб змінити</label>
+      <ul id="order-list" class="order-list"></ul>
+
+      <div class="add-row">
+        {% for type in types %}
+          <button type="button" class="chip-add" data-value="{{ type.value }}">+ {{ type.name }}</button>
+        {% endfor %}
+      </div>
+      <div class="hint">
+        Категорію можна додати кілька разів — тоді вона приходитиме частіше.
+        Категорії без питань пропускаються.
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2 class="panel-h">Як це виглядатиме</h2>
+    <div id="summary" class="summary"></div>
+    <div id="week" class="week"></div>
+    <div class="hint" id="shape-note"></div>
+  </section>
+
+  <div class="actions">
+    <button class="primary" type="submit">Зберегти</button>
+    <a href="{{ url_for('cohorts') }}" class="muted" style="margin-left:12px">Скасувати</a>
+  </div>
+</form>
+
+<script>
+  const TYPES = {{ types | map(attribute='value') | list | tojson }};
+  const NAMES = {{ types | map(attribute='name') | list | tojson }};
+  const nameOf = value => NAMES[TYPES.indexOf(value)] || ('#' + value);
+
+  const listEl   = document.getElementById('order-list');
+  const hiddenEl = document.getElementById('category-order');
+  const perDayEl = document.getElementById('per-day');
+
+  let order = hiddenEl.value.split(',').filter(Boolean).map(Number);
+  let dragFrom = null;
+
+  function render() {
+    listEl.innerHTML = '';
+
+    order.forEach((value, index) => {
+      const item = document.createElement('li');
+      item.className = 'order-item';
+      item.draggable = true;
+      item.innerHTML =
+        '<span class="grip">⠿</span>' +
+        '<span class="pos">' + (index + 1) + '</span>' +
+        '<span class="nm">' + nameOf(value) + '</span>' +
+        '<button type="button" class="rm" title="Прибрати">×</button>';
+
+      item.querySelector('.rm').onclick = () => { order.splice(index, 1); render(); };
+
+      item.addEventListener('dragstart', () => { dragFrom = index; item.classList.add('dragging'); });
+      item.addEventListener('dragend',   () => { dragFrom = null; item.classList.remove('dragging'); });
+      item.addEventListener('dragover',  event => { event.preventDefault(); item.classList.add('over'); });
+      item.addEventListener('dragleave', () => item.classList.remove('over'));
+      item.addEventListener('drop', event => {
+        event.preventDefault();
+        item.classList.remove('over');
+        if (dragFrom === null || dragFrom === index) return;
+        const [moved] = order.splice(dragFrom, 1);
+        order.splice(index, 0, moved);
+        render();
+      });
+
+      listEl.appendChild(item);
+    });
+
+    if (!order.length) {
+      listEl.innerHTML = '<li class="order-empty">Порожньо — питання не надсилатимуться.</li>';
+    }
+
+    hiddenEl.value = order.join(',');
+    preview();
+  }
+
+  function preview() {
+    const perDay = Math.max(1, parseInt(perDayEl.value || '1', 10));
+    const summary = document.getElementById('summary');
+    const week = document.getElementById('week');
+    const note = document.getElementById('shape-note');
+
+    if (!order.length) { summary.innerHTML = ''; week.innerHTML = ''; note.textContent = ''; return; }
+
+    // A week's tally is the thing that's hard to hold in your head: how often
+    // each category actually comes round once the cycle keeps running.
+    const perWeek = perDay * 7;
+    const tally = {};
+    for (let i = 0; i < perWeek; i++) {
+      const name = nameOf(order[i % order.length]);
+      tally[name] = (tally[name] || 0) + 1;
+    }
+
+    summary.innerHTML =
+      '<div class="stat"><b>' + perDay + '</b><span>на день</span></div>' +
+      '<div class="stat"><b>' + perWeek + '</b><span>на тиждень</span></div>' +
+      Object.entries(tally).sort((a, b) => b[1] - a[1]).map(([name, n]) =>
+        '<div class="stat sm"><b>' + n + '</b><span>' + name + '</span></div>').join('');
+
+    let cursor = 0, html = '';
+    for (let day = 1; day <= 7; day++) {
+      let chips = '';
+      for (let i = 0; i < perDay; i++) {
+        chips += '<span class="chip">' + nameOf(order[cursor % order.length]) + '</span>';
+        cursor++;
+      }
+      html += '<div class="day"><span class="dn">День ' + day + '</span>' + chips + '</div>';
+    }
+    week.innerHTML = html;
+
+    note.textContent = perDay % order.length === 0
+      ? 'Денна кількість кратна довжині ритму — кожен день має однаковий вигляд.'
+      : 'Ритм не збігається з денною кількістю — набір категорій зміщується щодня.';
+  }
+
+  perDayEl.addEventListener('input', preview);
+
+  document.querySelectorAll('.chip-add').forEach(button => {
+    button.onclick = () => { order.push(Number(button.dataset.value)); render(); };
+  });
+
+  render();
+</script>
+
+{% endblock %}

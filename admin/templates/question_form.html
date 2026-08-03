@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% set nav = 'questions' %}
+{% block body %}
+
+<h1>{{ 'Редагувати питання' if question else 'Нове питання' }}</h1>
+
+<form method="post">
+  <div class="row">
+    <label>Текст</label>
+    <textarea name="text" required>{{ question.text if question else '' }}</textarea>
+  </div>
+
+  <div class="row">
+    <label>Категорія</label>
+    <select name="type">
+      {% for type in types %}
+        <option value="{{ type.value }}" {{ 'selected' if question and question.type == type.value }}>
+          {{ type.name }}
+        </option>
+      {% endfor %}
+    </select>
+    <div class="hint">Порядок категорій задається в «Когорта» — саме він вирішує, коли це питання прийде.</div>
+  </div>
+
+  <div class="row">
+    <label>Варіанти відповіді (JSON)</label>
+    <textarea name="options" placeholder='["радість", "спокій"]  або  [["Приємні", "радість", "спокій"], "інше"]'>{{ question.options if question and question.options else '' }}</textarea>
+    <div class="hint">
+      Порожньо — питання з вільною відповіддю. Вкладений список — це група:
+      перший елемент є назвою кнопки, решта відкриваються за нею.
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Уточнення до</label>
+    <select name="parent">
+      <option value="">— це звичайне питання —</option>
+      {% for candidate in parents %}
+        <option value="{{ candidate.id }}"
+          {{ 'selected' if question and question.parent_id == candidate.id }}>
+          {{ candidate.text[:70] }}
+        </option>
+      {% endfor %}
+    </select>
+    <div class="hint">Уточнення приходить після відповіді на своє питання і ніколи не потрапляє в ротацію.</div>
+  </div>
+
+  <div class="row">
+    <label>
+      <input type="checkbox" name="allows_free_text" style="min-width:auto"
+        {{ 'checked' if question and question.allows_free_text }}>
+      Дозволити «Інше (написати самому)»
+    </label>
+  </div>
+
+  <div class="row">
+    <label>
+      <input type="checkbox" name="retired" style="min-width:auto"
+        {{ 'checked' if question and question.retired }}>
+      Зняти з ротації (відповіді зберігаються)
+    </label>
+  </div>
+
+  <button class="primary" type="submit">Зберегти</button>
+  <a href="{{ url_for('questions') }}" class="muted" style="margin-left:12px">Скасувати</a>
+</form>
+
+{% endblock %}

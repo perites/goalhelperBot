@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% set nav = 'dashboard' %}
+{% block body %}
+
+<h1>Огляд</h1>
+
+<div class="cards">
+  <div class="card"><div class="n">{{ seats_taken }}</div><div class="k">зайнято місць</div></div>
+  <div class="card"><div class="n">{{ seats_left }}</div><div class="k">вільно</div></div>
+  <div class="card"><div class="n">{{ sent_today }}</div><div class="k">надіслано сьогодні</div></div>
+  <div class="card"><div class="n">{{ answered_today }}</div><div class="k">відповідей сьогодні</div></div>
+  <div class="card"><div class="n">{{ questions }}</div><div class="k">питань у ротації</div></div>
+  <div class="card"><div class="n">{{ retired }}</div><div class="k">знято з ротації</div></div>
+</div>
+
+<h2>Набір · {{ cohort.name if cohort else '—' }}</h2>
+{% if cohort %}
+<table>
+  <tr><th>Стан</th><td>{{ enrollment }}</td></tr>
+  <tr><th>Вікно</th><td>{{ cohort.enrollment_opens }} — {{ cohort.enrollment_closes }}</td></tr>
+  <tr><th>Тривалість</th><td>{{ cohort.duration_days }} днів</td></tr>
+  <tr><th>Питань на день</th><td>{{ cohort.questions_per_day }}</td></tr>
+  <tr><th>Порядок категорій</th>
+      <td>{% for t in cohort.categories %}{{ t.name }}{% if not loop.last %} → {% endif %}{% endfor %}</td></tr>
+</table>
+{% else %}
+<p class="muted">Когорти ще немає.</p>
+{% endif %}
+
+<h2>Учасники</h2>
+<table>
+  {% for status, count in statuses %}
+    {% if count %}<tr><th>{{ status.name }}</th><td>{{ count }}</td></tr>{% endif %}
+  {% endfor %}
+</table>
+
+<h2>Останні попередження</h2>
+{% if recent_problems %}
+<pre>{% for line in recent_problems %}{{ line }}
+{% endfor %}</pre>
+{% else %}
+<p class="muted">Нічого — це добре.</p>
+{% endif %}
+
+<h2>Експорт</h2>
+<p>
+  <a href="{{ url_for('export_users') }}">users.csv</a> ·
+  <a href="{{ url_for('export_answers') }}">answers.csv</a>
+</p>
+
+{% endblock %}

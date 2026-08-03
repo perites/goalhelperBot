@@ -22,6 +22,8 @@ def seed_default_cohort():
     today = clock.today_kyiv()
 
     cohort = Cohort.create(
+        name="Пілот",
+        is_active=True,
         enrollment_opens=today,
         enrollment_closes=today + timedelta(days=DEFAULT_ENROLLMENT_WINDOW_DAYS),
         max_people=DEFAULT_MAX_PEOPLE,
@@ -38,12 +40,23 @@ def seed_default_cohort():
 
 
 def current_cohort():
-    return (
-        Cohort.select()
-        .where(Cohort.status != CohortStatus.ENDED)
-        .order_by(Cohort.enrollment_opens.desc())
-        .first()
-    )
+    """The one cohort taking new participants. Explicit rather than inferred,
+    so adding a cohort for a future run can't quietly divert enrolments."""
+    return Cohort.select().where(Cohort.is_active == True).first()  # noqa: E712
+
+
+def activate_cohort(cohort):
+    """Make this the active one. Only ever one, so the rest are stood down in
+    the same transaction — a moment with two active cohorts would send people
+    into whichever the query happened to return first."""
+    with Cohort._meta.database.atomic():
+        Cohort.update(is_active=False).where(Cohort.id != cohort.id).execute()
+        cohort.is_active = True
+        cohort.save()
+
+    logger.info("Cohort id=%s (%s) is now active", cohort.id, cohort.name)
+
+    return cohort
 
 
 def seats_taken(cohort):
@@ -118,5 +131,8 @@ def cohort_is_complete(cohort):
 
 
 def end_cohort(cohort):
+    """Ending a cohort also stands it down: a finished run shouldn't stay the
+    one new participants are enrolled into."""
     cohort.status = CohortStatus.ENDED
+    cohort.is_active = False
     cohort.save()

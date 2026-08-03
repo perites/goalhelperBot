@@ -31,6 +31,13 @@ class Cohort(BaseModel):
     start/end for the 30 days themselves, because each participant's cycle runs
     from their own onboarding completion (ТЗ: "День 1 рахується від дати
     завершення онбордингу")."""
+    name = CharField(default="Пілот")
+
+    # Exactly one cohort is active; it's the one /start enrols into. Others
+    # are kept for their history and their participants' settings, which are
+    # read per-user through User.cohort rather than from here.
+    is_active = BooleanField(default=False)
+
     enrollment_opens = DateField()
     enrollment_closes = DateField()
     duration_days = IntegerField(default=CYCLE_LENGTH_DAYS)
@@ -152,12 +159,30 @@ class Question(BaseModel):
     # accepts typed answers and nothing else.
     allows_free_text = BooleanField(default=False)
 
+    # Taken out of rotation without being deleted. A question that has been
+    # answered can't be removed — the answers reference it — so retiring is
+    # how an admin withdraws one while keeping participants' replies intact.
+    retired = BooleanField(default=False)
+
     @property
     def option_list(self):
         """Parsed answer options, or None for an open question."""
         if self.options is None:
             return None
         return json.loads(self.options)
+
+    @property
+    def type_name(self):
+        return QuestionType(self.type).name
+
+    @property
+    def option_count(self):
+        """How many choices this offers, counting inside groups."""
+        options = self.option_list
+        if not options:
+            return 0
+
+        return sum(len(entry) - 1 if isinstance(entry, list) else 1 for entry in options)
 
 
 class Answer(BaseModel):

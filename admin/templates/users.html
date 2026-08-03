@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% set nav = 'users' %}
+{% block body %}
+
+<h1>Учасники</h1>
+
+<div class="toolbar">
+  <a href="{{ url_for('export_users') }}">users.csv</a> ·
+  <a href="{{ url_for('export_answers') }}">answers.csv</a>
+</div>
+
+<table>
+  <tr>
+    <th>Ім'я</th><th>Telegram</th><th>Статус</th><th>День</th>
+    <th>Відповіді</th><th>Пропущено</th><th>Остання активність</th>
+  </tr>
+  {% for row in rows %}
+  <tr>
+    <td><a href="{{ url_for('user_detail', telegram_id=row.user.telegram_id) }}">
+      {{ row.user.name or '—' }}</a></td>
+    <td class="muted">{% if row.user.username %}@{{ row.user.username }}{% else %}{{ row.user.telegram_id }}{% endif %}</td>
+    <td><span class="tag {{ 'on' if row.status.name == 'ACTIVE' }}">{{ row.status.name }}</span></td>
+    <td class="muted">{{ row.user.cycle_day if row.user.date_started else '—' }}</td>
+    <td>{{ row.answered }}</td>
+    <td class="muted">{{ row.skipped }}</td>
+    <td class="muted">{{ row.last_seen or '—' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+{% endblock %}

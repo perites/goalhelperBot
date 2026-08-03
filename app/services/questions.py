@@ -79,8 +79,12 @@ def seed_questions():
 # --- Daily rotation --------------------------------------------------------
 
 def rotation_questions():
-    """The daily bank: follow-ups are reachable only through their parent."""
-    return Question.select().where(Question.parent.is_null(True))
+    """The daily bank: follow-ups are reachable only through their parent, and
+    retired questions are kept for their history but never sent again."""
+    return Question.select().where(
+        Question.parent.is_null(True)
+        & (Question.retired == False)  # noqa: E712 - peewee needs the comparison
+    )
 
 
 def category_order_for(user):

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% set nav = 'logs' %}
+{% block body %}
+
+<h1>Логи</h1>
+
+<div class="toolbar">
+  <form method="get">
+    <select name="level" onchange="this.form.submit()">
+      <option value="" {{ 'selected' if not level }}>усі рівні</option>
+      {% for name in ['INFO', 'WARNING', 'ERROR', 'CRITICAL'] %}
+        <option value="{{ name }}" {{ 'selected' if level == name }}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  <span class="muted">{{ path }}</span>
+</div>
+
+{% if lines %}
+<pre>{% for line in lines %}{{ line }}
+{% endfor %}</pre>
+{% else %}
+<p class="muted">Порожньо.</p>
+{% endif %}
+
+{% endblock %}

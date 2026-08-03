@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% set nav = 'questions' %}
+{% block body %}
+
+<h1>Питання</h1>
+
+<div class="toolbar">
+  <a href="{{ url_for('question_form') }}"><button class="primary">Додати питання</button></a>
+  <span class="muted">Уточнення показані під своїм питанням і ніколи не приходять самі.</span>
+</div>
+
+<table>
+  <tr>
+    <th>Текст</th><th>Категорія</th><th>Варіанти</th><th>Відповідей</th><th></th>
+  </tr>
+  {% for question in questions %}
+  <tr>
+    <td>
+      <a href="{{ url_for('question_form', question_id=question.id) }}">{{ question.text }}</a>
+      {% if question.retired %}<span class="tag bad">знято</span>{% endif %}
+      {% if question.allows_free_text %}<span class="tag">своя відповідь</span>{% endif %}
+    </td>
+    <td class="muted">{{ question.type_name }}</td>
+    <td class="muted">{{ question.option_count }}</td>
+    <td class="muted">{{ answered.get(question.id, 0) }}</td>
+    <td>
+      <form method="post" action="{{ url_for('question_delete', question_id=question.id) }}" class="inline"
+            onsubmit="return confirm('Видалити це питання?')">
+        <button class="danger">Видалити</button>
+      </form>
+    </td>
+  </tr>
+    {% for follow_up in question.follow_ups %}
+    <tr>
+      <td style="padding-left:26px">
+        ↳ <a href="{{ url_for('question_form', question_id=follow_up.id) }}">{{ follow_up.text }}</a>
+        {% if follow_up.retired %}<span class="tag bad">знято</span>{% endif %}
+      </td>
+      <td class="muted">{{ follow_up.type_name }}</td>
+      <td class="muted">{{ follow_up.option_count }}</td>
+      <td class="muted">{{ answered.get(follow_up.id, 0) }}</td>
+      <td>
+        <form method="post" action="{{ url_for('question_delete', question_id=follow_up.id) }}" class="inline"
+              onsubmit="return confirm('Видалити це уточнення?')">
+          <button class="danger">Видалити</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  {% endfor %}
+</table>
+
+{% endblock %}

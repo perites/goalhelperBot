@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% set nav = 'users' %}
+{% block body %}
+
+<h1>{{ user.name or user.telegram_id }}
+  <span class="tag {{ 'on' if status.name == 'ACTIVE' }}">{{ status.name }}</span>
+</h1>
+
+<table>
+  <tr><th>Telegram</th><td>{% if user.username %}@{{ user.username }}{% endif %} ({{ user.telegram_id }})</td></tr>
+  <tr><th>Намір</th><td>{{ user.intention or '—' }}</td></tr>
+  <tr><th>Час повідомлень</th><td>{{ slots }}</td></tr>
+  <tr><th>Старт</th><td>{{ user.date_started or '—' }}</td></tr>
+  <tr><th>День циклу</th><td>{{ user.cycle_day }} із {{ user.cycle_length }}</td></tr>
+  <tr><th>Пауз (днів)</th><td>{{ user.paused_days }}</td></tr>
+</table>
+
+<h2>Статистика</h2>
+<div class="cards">
+  <div class="card"><div class="n">{{ stats.answered }}</div><div class="k">відповідей</div></div>
+  <div class="card"><div class="n">{{ stats.skipped }}</div><div class="k">пропущено</div></div>
+  <div class="card"><div class="n">{{ stats.steps }}</div><div class="k">кроків</div></div>
+  <div class="card"><div class="n">{{ stats.wins }}</div><div class="k">перемог</div></div>
+  <div class="card"><div class="n">{{ stats.gratitude }}</div><div class="k">вдячності</div></div>
+</div>
+<p class="muted" style="margin-top:10px">Найчастіші емоції: {{ stats.emotions }}</p>
+
+<h2>Дії</h2>
+<form method="post" action="{{ url_for('user_action', telegram_id=user.telegram_id) }}" class="inline">
+  <button name="action" value="pause">Пауза</button>
+  <button name="action" value="resume">Відновити</button>
+  <button name="action" value="finish">Завершити цикл</button>
+  <button name="action" value="stop" class="danger"
+          onclick="return confirm('Припинити участь? Повернутись вони не зможуть.')">Припинити участь</button>
+</form>
+<div class="hint">Питання надсилає бот — тут лише стан. Щоб надіслати вручну: /ask {{ user.telegram_id }}</div>
+
+{% if final %}
+<h2>Підсумкові відповіді</h2>
+<table>
+  <tr><th>Надіслано</th><td class="muted">{{ final.sent_at }}</td></tr>
+  <tr><th>Відповідь</th><td>{{ final.answer or '— ще не відповіли —' }}</td></tr>
+</table>
+{% endif %}
+
+<h2>Відповіді</h2>
+<table>
+  <tr><th>День</th><th>Час</th><th>Питання</th><th>Відповідь</th><th>Надіслано</th></tr>
+  {% for answer in answers %}
+  <tr>
+    <td class="muted">{{ answer.cycle_day or '—' }}</td>
+    <td class="muted">{{ answer.slot or '—' }}</td>
+    <td>{% if answer.parent_id %}<span class="muted">↳ </span>{% endif %}{{ answer.question.text }}</td>
+    <td>
+      {% if answer.skipped %}<span class="tag">пропущено</span>
+      {% elif answer.answer %}{{ answer.answer }}
+      {% else %}<span class="muted">чекає</span>{% endif %}
+    </td>
+    <td class="muted">{{ answer.sent_at }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+{% endblock %}

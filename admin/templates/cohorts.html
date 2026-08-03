@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% set nav = 'cohort' %}
+{% block body %}
+
+<div class="pagehead">
+  <h1>Когорти</h1>
+  <a href="{{ url_for('cohort_form') }}"><button class="primary">Нова когорта</button></a>
+</div>
+
+<p class="muted" style="margin-top:-6px">
+  Активна лише одна — саме в неї потрапляють нові учасники.
+  Решта зберігаються разом зі своїми налаштуваннями та історією.
+</p>
+
+<div class="stack">
+{% for row in rows %}
+  <div class="panel {{ 'accented' if row.cohort.is_active }}">
+    <div class="panel-head">
+      <div>
+        <a href="{{ url_for('cohort_form', cohort_id=row.cohort.id) }}" class="panel-title">
+          {{ row.cohort.name }}</a>
+        {% if row.cohort.is_active %}<span class="tag on">активна</span>{% endif %}
+        <span class="tag">{{ row.status.name }}</span>
+      </div>
+      <div class="panel-actions">
+        {% if not row.cohort.is_active %}
+        <form method="post" action="{{ url_for('cohort_activate', cohort_id=row.cohort.id) }}" class="inline">
+          <button>Зробити активною</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('cohort_delete', cohort_id=row.cohort.id) }}" class="inline"
+              onsubmit="return confirm('Видалити «{{ row.cohort.name }}»?')">
+          <button class="danger">Видалити</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="facts">
+      <div><span class="k">Набір</span>{{ row.cohort.enrollment_opens }} — {{ row.cohort.enrollment_closes }}</div>
+      <div><span class="k">Місць</span>{{ row.participants }} / {{ row.cohort.max_people }}</div>
+      <div><span class="k">Зараз проходять</span>{{ row.running }}</div>
+      <div><span class="k">Цикл</span>{{ row.cohort.duration_days }} днів</div>
+      <div><span class="k">Питань на день</span>{{ row.cohort.questions_per_day }}</div>
+      <div class="wide"><span class="k">Ритм</span>
+        {% for t in row.cohort.categories %}<span class="chip">{{ t.name }}</span>{% endfor %}
+      </div>
+    </div>
+  </div>
+{% else %}
+  <p class="muted">Ще жодної когорти.</p>
+{% endfor %}
+</div>
+
+{% endblock %}
