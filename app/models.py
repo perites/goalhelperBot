@@ -106,12 +106,19 @@ class UserTime(BaseModel):
 
 
 class Question(BaseModel):
-    """Daily rotation questions only. The closing questions live in
-    FinalQuestion so this table needs no filtering on every lookup."""
+    """Daily questions and their follow-ups. The closing questions live in
+    FinalQuestion, which is a different shape entirely.
+
+    A row with a `parent` is a follow-up: it is reached only by answering that
+    parent, never by the daily rotation. `parent IS NULL` is therefore the
+    filter that defines the rotation, and it maintains itself — point a
+    question at a parent and it leaves the rotation automatically.
+    """
     text = TextField()
     type = IntegerField()
     options = TextField(null=True)
     order = IntegerField(unique=True)
+    parent = ForeignKeyField("self", null=True, backref="follow_ups")
 
     @property
     def option_list(self):
@@ -142,6 +149,12 @@ class Answer(BaseModel):
     # answering the 09:00 question at 12:30 sends the next one at 12:30, still
     # as part of the morning run.
     slot = CharField(null=True)
+
+    # The answer this one follows up on. Set once, at creation. Nothing in
+    # delivery depends on it — what comes next is decided by Question.parent —
+    # but it keeps a reply and its follow-up together in the export, and it's
+    # what the quota and statistics exclude on.
+    parent = ForeignKeyField("self", null=True, backref="follow_ups")
 
     @classmethod
     def open_for(cls, user):

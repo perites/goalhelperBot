@@ -27,17 +27,35 @@ from app.texts import (
 logger = get_logger(__name__)
 
 
+def _encode_options(options):
+    return json.dumps(options, ensure_ascii=False) if options else None
+
+
 def seed_questions():
     """Populate both banks once, leaving sparse gaps in `order` so questions
     can be inserted later without renumbering."""
     if not Question.select().exists():
-        for position, (text, question_type, options) in enumerate(sample_questions, start=1):
-            Question.create(
+        for position, (text, question_type, options, follow_ups) in enumerate(
+            sample_questions, start=1
+        ):
+            order = position * QUESTION_ORDER_STEP
+            parent = Question.create(
                 text=text,
                 type=question_type,
-                options=json.dumps(options, ensure_ascii=False) if options else None,
-                order=position * QUESTION_ORDER_STEP,
+                options=_encode_options(options),
+                order=order,
             )
+
+            # Follow-ups sit inside the parent's order gap, so they stay
+            # between it and the next rotation question.
+            for offset, (sub_text, sub_type, sub_options) in enumerate(follow_ups, start=1):
+                Question.create(
+                    text=sub_text,
+                    type=sub_type,
+                    options=_encode_options(sub_options),
+                    order=order + offset,
+                    parent=parent,
+                )
 
     if not FinalQuestion.select().exists():
         for position, text in enumerate(final_questions, start=1):
@@ -51,12 +69,20 @@ def seed_questions():
 
 # --- Daily rotation --------------------------------------------------------
 
+def rotation_questions():
+    """The daily bank: follow-ups are reachable only through their parent."""
+    return Question.select().where(Question.parent.is_null(True))
+
+
 def next_question_for(user):
     """The next question in `order`, wrapping to the first once the bank runs out."""
-    first_question = Question.select().order_by(Question.order).first()
+    first_question = rotation_questions().order_by(Question.order).first()
+
+    # Follow-ups are excluded here too, or the rotation pointer would jump to
+    # a follow-up's order and the daily sequence would derail from then on.
     last_sent = (
         Answer.select()
-        .where(Answer.user == user)
+        .where((Answer.user == user) & Answer.parent.is_null(True))
         .order_by(Answer.sent_at.desc(), Answer.id.desc())
         .first()
     )
@@ -65,7 +91,7 @@ def next_question_for(user):
         return first_question
 
     following = (
-        Question.select()
+        rotation_questions()
         .where(Question.order > last_sent.question.order)
         .order_by(Question.order)
         .first()
@@ -108,6 +134,11 @@ def build_question_keyboard(question, answer):
 def render_question(answer):
     """The question message as it was originally sent. Uses the stored
     cycle_day so a reply arriving the next day doesn't redraw a wrong number."""
+    # A follow-up arrives mid-exchange, so it skips the day/intention header
+    # that has just been shown above it.
+    if answer.parent_id is not None:
+        return answer.question.text
+
     user = answer.user
 
     return question_message_template.format(
@@ -183,7 +214,11 @@ async def deliver_question(bot, user, reason, slot=None):
 
 
 def sent_in_slot_today(user, slot):
-    """How many questions have gone out for this slot today."""
+    """How many questions have gone out for this slot today.
+
+    Follow-ups don't count: a question and its follow-up are one reflective
+    unit, so a quota of three means three topics rather than three messages.
+    """
     if slot is None:
         return 0
 
@@ -194,11 +229,65 @@ def sent_in_slot_today(user, slot):
         .where(
             (Answer.user == user)
             & (Answer.slot == slot)
+            & Answer.parent.is_null(True)
             & (Answer.sent_at >= day_start)
             & (Answer.sent_at < day_start + timedelta(days=1))
         )
         .count()
     )
+
+
+def next_follow_up(parent_answer):
+    """The next unasked follow-up for this particular answer.
+
+    Keyed on the answer, not the question, so the same question asked again on
+    a later day gets its follow-up again.
+    """
+    already_asked = Answer.select(Answer.question).where(Answer.parent == parent_answer)
+
+    return (
+        Question.select()
+        .where(
+            (Question.parent == parent_answer.question_id)
+            & Question.id.not_in(already_asked)
+        )
+        .order_by(Question.order)
+        .first()
+    )
+
+
+async def send_follow_up(bot, user, parent_answer):
+    """Send the next follow-up to an answer, if that question has one."""
+    question = next_follow_up(parent_answer)
+    if question is None:
+        return None
+
+    answer = Answer.create(
+        user=user,
+        question=question,
+        sent_at=clock.now_kyiv(),
+        cycle_day=parent_answer.cycle_day,
+        # Carried for the record; the quota above ignores follow-ups anyway.
+        slot=parent_answer.slot,
+        parent=parent_answer,
+    )
+
+    message = await bot.send_message(
+        chat_id=user.telegram_id,
+        text=render_question(answer),
+        reply_markup=build_question_keyboard(question, answer),
+    )
+
+    if message is not None:
+        answer.message_id = message.message_id
+        answer.save()
+
+    logger.info(
+        "Sent follow-up to user=%s question=%s (after answer=%s)",
+        user.telegram_id, question.id, parent_answer.id,
+    )
+
+    return answer
 
 
 def slot_quota(user, slot):

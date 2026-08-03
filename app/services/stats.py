@@ -1,4 +1,10 @@
-"""Per-user statistics, shared by the menu and the end-of-cycle summary."""
+"""Per-user statistics, shared by the menu and the end-of-cycle summary.
+
+Follow-up answers are excluded throughout. A question and its follow-up are
+one reflective unit, so counting both would inflate "Відповідей"; and an
+intensity follow-up carries its parent's question type, so without the filter
+its values ("7") would rank alongside real emotions in "найчастіші емоції".
+"""
 from collections import Counter
 
 from app.config import TOP_EMOTIONS_SHOWN
@@ -11,7 +17,11 @@ def answered_count(user, question_type=None):
     query = (
         Answer.select()
         .join(Question)
-        .where((Answer.user == user) & Answer.answer.is_null(False))
+        .where(
+            (Answer.user == user)
+            & Answer.answer.is_null(False)
+            & Answer.parent.is_null(True)
+        )
     )
 
     if question_type is not None:
@@ -21,7 +31,15 @@ def answered_count(user, question_type=None):
 
 
 def skipped_count(user):
-    return Answer.select().where((Answer.user == user) & (Answer.skipped == True)).count()  # noqa: E712
+    return (
+        Answer.select()
+        .where(
+            (Answer.user == user)
+            & (Answer.skipped == True)  # noqa: E712
+            & Answer.parent.is_null(True)
+        )
+        .count()
+    )
 
 
 def top_emotions(user):
@@ -32,6 +50,7 @@ def top_emotions(user):
             (Answer.user == user)
             & (Question.type == QuestionType.EMOTION)
             & Answer.answer.is_null(False)
+            & Answer.parent.is_null(True)
         )
     )
 

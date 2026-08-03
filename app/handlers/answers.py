@@ -19,6 +19,7 @@ from app.models import Answer, User
 from app.services.cycle import complete_cycle, reached_final_day, send_closing_summary
 from app.services.questions import (
     deliver_question,
+    send_follow_up,
     send_next_in_slot,
     pending_answer,
     pending_final_answer,
@@ -59,10 +60,16 @@ async def _hand_off_if_final_day(bot, user):
 
 
 async def _after_daily_answer(bot, user, answer):
-    """Reaching the last day beats everything; otherwise carry on with this
+    """Three things can follow an answer, in this order of precedence:
+    reaching the last day beats everything; then a follow-up, so the current
+    unit finishes before a new one starts; then the next question in the
     slot's run. Returns True when a message was sent, which tells the caller
-    to skip the plain acknowledgement."""
+    to skip the plain acknowledgement.
+    """
     if await _hand_off_if_final_day(bot, user):
+        return True
+
+    if await send_follow_up(bot, user, answer) is not None:
         return True
 
     return await send_next_in_slot(bot, user, answer.slot) is not None
@@ -101,6 +108,13 @@ async def handle_skip_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     # Rewriting the message also drops its buttons.
     await show_resolved_answer(context.bot, answer)
+
+    # Skipping a question ends the slot's run — but skipping a *follow-up*
+    # shouldn't, since they already engaged with the question it hangs off.
+    if answer.parent_id is not None:
+        if await send_next_in_slot(context.bot, current_user(update), answer.slot) is not None:
+            return
+
     await query.message.reply_text(question_skipped_message)
 
 
