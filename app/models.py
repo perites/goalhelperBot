@@ -18,7 +18,12 @@ from app.config import (
     PAUSE_DURATION_DAYS,
 )
 
-db = SqliteDatabase(DATABASE_NAME)
+# SQLite ignores foreign keys unless asked to enforce them, per connection.
+# With this on, every reference below is a real constraint: the database
+# refuses to delete a row that something else still points at, so the rules in
+# services/deletion.py have a backstop underneath them — including against
+# writes that never go through this code at all, like sqlite-web.
+db = SqliteDatabase(DATABASE_NAME, pragmas={"foreign_keys": 1})
 
 
 class BaseModel(Model):
@@ -77,7 +82,9 @@ class User(BaseModel):
     intention_type = IntegerField(null=True)
     consent = BooleanField(null=True)
     status = IntegerField()
-    cohort = ForeignKeyField(Cohort, null=True, backref="participants")
+    cohort = ForeignKeyField(
+        Cohort, null=True, backref="participants", on_delete="RESTRICT",
+    )
 
     paused_days = IntegerField(default=0)
     paused_at = DateTimeField(null=True)
@@ -135,7 +142,7 @@ class User(BaseModel):
 
 
 class UserTime(BaseModel):
-    user = ForeignKeyField(User, backref="times")
+    user = ForeignKeyField(User, backref="times", on_delete="RESTRICT")
     time = TimeField()
 
 
@@ -152,7 +159,9 @@ class Question(BaseModel):
     type = IntegerField()
     options = TextField(null=True)
     order = IntegerField(unique=True)
-    parent = ForeignKeyField("self", null=True, backref="follow_ups")
+    parent = ForeignKeyField(
+        "self", null=True, backref="follow_ups", on_delete="RESTRICT",
+    )
 
     # Offer a "write your own" button alongside the listed options. Only
     # meaningful when there are options — a question without any already
@@ -186,8 +195,8 @@ class Question(BaseModel):
 
 
 class Answer(BaseModel):
-    user = ForeignKeyField(User, backref="answers")
-    question = ForeignKeyField(Question, backref="answers")
+    user = ForeignKeyField(User, backref="answers", on_delete="RESTRICT")
+    question = ForeignKeyField(Question, backref="answers", on_delete="RESTRICT")
     sent_at = DateTimeField()
     answered_at = DateTimeField(null=True)
     answer = TextField(null=True)
@@ -211,7 +220,9 @@ class Answer(BaseModel):
     # delivery depends on it — what comes next is decided by Question.parent —
     # but it keeps a reply and its follow-up together in the export, and it's
     # what the quota and statistics exclude on.
-    parent = ForeignKeyField("self", null=True, backref="follow_ups")
+    parent = ForeignKeyField(
+        "self", null=True, backref="follow_ups", on_delete="RESTRICT",
+    )
 
     # Which position in the cohort's category order this send came from. Recorded
     # rather than derived from the question's type, because a category may
@@ -241,7 +252,7 @@ class FinalQuestion(BaseModel):
 
 class FinalAnswer(BaseModel):
     """One row per user: their single reply to the whole closing block."""
-    user = ForeignKeyField(User, backref="final_answers")
+    user = ForeignKeyField(User, backref="final_answers", on_delete="RESTRICT")
     sent_at = DateTimeField()
     answered_at = DateTimeField(null=True)
     answer = TextField(null=True)
