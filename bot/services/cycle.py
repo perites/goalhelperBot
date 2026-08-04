@@ -7,6 +7,7 @@ from bot import clock
 from bot.enums import Status
 from bot.logs import get_logger
 from bot.models import User
+from bot.services.cohort import active_participants
 from bot.services.questions import (
     close_open_answers,
     has_received_closing_block,
@@ -77,7 +78,7 @@ def users_due_for_completion():
     """Active users past their personal last day who never answered on it, so
     the answer-triggered handoff didn't fire. Paused users are excluded
     because their finish line moves with the pause."""
-    candidates = User.select().where(User.status == Status.ACTIVE)
+    candidates = active_participants()
 
     return [
         user for user in candidates

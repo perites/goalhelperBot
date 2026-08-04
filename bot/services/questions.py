@@ -1,9 +1,8 @@
-"""Question bank: seeding, rotation, and delivery.
+"""Question bank: rotation and delivery.
 
 Pure service layer — no Telegram handlers live here, so nothing in this module
 needs to know about updates or callbacks.
 """
-import json
 import random
 from datetime import datetime, timedelta
 
@@ -12,17 +11,14 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from bot import clock
 from bot.config import (
     BACK_ACTION,
-    DEFAULT_CATEGORY_ORDER,
-    DEFAULT_QUESTIONS_PER_DAY,
     OPTIONS_PER_ROW,
-    QUESTION_ORDER_STEP,
     SHORT_OPTION_LENGTH,
 )
+from bot.errors import CohortMissing
 from bot.logs import get_logger
 from bot.models import Answer, FinalAnswer, FinalQuestion, Question
 from bot.services.slots import questions_per_slot, saved_slots
 from bot.texts import (
-    final_questions,
     final_questions_block,
     question_answer_button,
     question_back_button,
@@ -31,49 +27,9 @@ from bot.texts import (
     question_message_template,
     question_skip_button,
     question_skipped_suffix,
-    sample_questions,
 )
 
 logger = get_logger(__name__)
-
-
-def _encode_options(options):
-    return json.dumps(options, ensure_ascii=False) if options else None
-
-
-def _create_question(spec, order, parent=None):
-    """One seed entry. Everything but text and type is optional."""
-    return Question.create(
-        text=spec["text"],
-        type=spec["type"],
-        options=_encode_options(spec.get("options")),
-        allows_free_text=spec.get("free_text", False),
-        order=order,
-        parent=parent,
-    )
-
-
-def seed_questions():
-    """Populate both banks once, leaving sparse gaps in `order` so questions
-    can be inserted later without renumbering."""
-    if not Question.select().exists():
-        for position, spec in enumerate(sample_questions, start=1):
-            order = position * QUESTION_ORDER_STEP
-            parent = _create_question(spec, order)
-
-            # Follow-ups sit inside the parent's order gap, so they stay
-            # between it and the next rotation question.
-            for offset, follow_up in enumerate(spec.get("follow_ups", ()), start=1):
-                _create_question(follow_up, order + offset, parent=parent)
-
-    if not FinalQuestion.select().exists():
-        for position, text in enumerate(final_questions, start=1):
-            FinalQuestion.create(text=text, order=position * QUESTION_ORDER_STEP)
-
-    logger.info(
-        "Question banks ready: %s daily, %s closing",
-        Question.select().count(), FinalQuestion.select().count(),
-    )
 
 
 # --- Daily rotation --------------------------------------------------------
@@ -88,9 +44,11 @@ def rotation_questions():
 
 
 def category_order_for(user):
-    """The cycle this user's cohort runs on, falling back to the default for
-    anyone not attached to one."""
-    return user.cohort.categories if user.cohort else list(DEFAULT_CATEGORY_ORDER)
+    """The category rhythm this user's cohort runs on."""
+    if user.cohort is None:
+        raise CohortMissing(user, "the category order")
+
+    return user.cohort.categories
 
 
 def category_at(order, index):
@@ -157,6 +115,16 @@ def next_question_for(user, rng=None):
     from it. Categories with nothing in them are skipped rather than stalling,
     so an order list can name a category before its questions exist."""
     order = category_order_for(user)
+    if not order:
+        # A cohort whose category_order is empty or parses to nothing. Every
+        # step below divides by its length, so this is checked once here
+        # rather than defended against in each of them.
+        logger.warning(
+            "Cohort id=%s has no usable category order; nothing to send to user=%s",
+            user.cohort_id, user.telegram_id,
+        )
+        return None, None
+
     start = next_category_index(user, order)
 
     for offset in range(len(order)):
@@ -458,7 +426,10 @@ async def send_follow_up(bot, user, parent_answer):
 
 def daily_total_for(user):
     """How many questions a day this user's cohort asks for."""
-    return user.cohort.questions_per_day if user.cohort else DEFAULT_QUESTIONS_PER_DAY
+    if user.cohort is None:
+        raise CohortMissing(user, "the daily question total")
+
+    return user.cohort.questions_per_day
 
 
 def slot_quota(user, slot):

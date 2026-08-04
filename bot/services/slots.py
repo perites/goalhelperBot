@@ -12,7 +12,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.config import (
     CONTINUE_ACTION,
-    DEFAULT_QUESTIONS_PER_DAY,
     SLOT_EVENING_FROM_HOUR,
     SLOT_TIMES,
     SLOT_MORNING_UNTIL_HOUR,
@@ -102,7 +101,7 @@ def slots_in_order(slots):
     return sorted(slots)
 
 
-def questions_per_slot(user_slots, total=None):
+def questions_per_slot(user_slots, total):
     """Spread the day's questions across the slots someone picked.
 
     Remainders go to the later slots, so the day builds rather than
@@ -114,7 +113,6 @@ def questions_per_slot(user_slots, total=None):
     if not ordered:
         return {}
 
-    total = DEFAULT_QUESTIONS_PER_DAY if total is None else total
     base, remainder = divmod(total, len(ordered))
 
     # Fewer questions than slots: one each, and the remainder is meaningless.

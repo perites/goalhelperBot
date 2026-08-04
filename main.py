@@ -35,8 +35,6 @@ from bot.handlers.menu import (
 from bot.handlers.onboarding import onboarding_conv_handler
 from bot.handlers.start import start_handler
 from bot.models import initialize_database
-from bot.services.cohort import seed_default_cohort
-from bot.services.questions import seed_questions
 from bot.services.scheduler import schedule
 
 logger = get_logger(__name__)
@@ -99,10 +97,10 @@ def main():
     logger.info("Starting up")
 
     # Kept out of module scope so importing this module has no side effects
-    # on the database — tests import it freely.
+    # on the database — tests import it freely. Creates the tables if the file
+    # is new; it never puts anything in them. Content comes from the admin
+    # panel, or from `python -m samples.seed` for a demo database.
     initialize_database()
-    seed_questions()
-    seed_default_cohort()
 
     token = os.getenv("BOT_TOKEN")
     if not token:

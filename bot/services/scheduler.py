@@ -13,10 +13,12 @@ from telegram.ext import ContextTypes
 
 from bot import clock
 from bot.config import SWEEP_HOUR, TICK_INTERVAL_HOURS
-from bot.enums import Status
+from bot.errors import CohortMissing
 from bot.logs import get_logger
 from bot.models import User, UserTime
-from bot.services.cohort import cohort_is_complete, current_cohort, end_cohort
+from bot.services.cohort import (
+    active_participants, cohort_is_complete, current_cohort, end_cohort,
+)
 from bot.services.cycle import (
     complete_cycle,
     resume_user,
@@ -37,7 +39,7 @@ def users_due_at(hour):
     rows = (
         UserTime.select(UserTime, User)
         .join(User)
-        .where(User.status == Status.ACTIVE)
+        .where(User.telegram_id.in_(active_participants().select(User.telegram_id)))
     )
 
     seen = {}
@@ -88,7 +90,21 @@ async def send_due_questions(bot, now):
             logger.debug("user=%s already started the %s run today", user.telegram_id, slot)
             continue
 
-        if await deliver_question(bot, user, reason="scheduled", slot=slot) is None:
+        # Per user, so one participant the bot has no rules for — no cohort,
+        # a cohort whose order parses to nothing — costs their send and not
+        # everyone else's hour.
+        try:
+            delivered = await deliver_question(bot, user, reason="scheduled", slot=slot)
+        except CohortMissing:
+            failed += 1
+            logger.warning("Skipping user=%s: %s", user.telegram_id, "no cohort", exc_info=True)
+            continue
+        except Exception:  # noqa: BLE001
+            failed += 1
+            logger.warning("Failed to send to user=%s", user.telegram_id, exc_info=True)
+            continue
+
+        if delivered is None:
             failed += 1
             continue
 

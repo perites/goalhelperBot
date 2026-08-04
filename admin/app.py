@@ -15,12 +15,7 @@ from flask import (
 )
 
 from bot import clock, models
-from bot.config import (
-    CYCLE_LENGTH_DAYS,
-    DEFAULT_CATEGORY_ORDER,
-    LOG_DIR,
-    LOG_FILE_NAME,
-)
+from bot.config import LOG_DIR, LOG_FILE_NAME, QUESTION_ORDER_STEP
 from bot.enums import CohortStatus, QuestionType, Status
 from bot.models import (
     Answer, Cohort, FinalAnswer, FinalQuestion, Question, User, )
@@ -94,7 +89,7 @@ def _parse_options(raw):
 def _next_order():
     highest = Question.select(Question.order).order_by(Question.order.desc()).first()
 
-    return (highest.order + 10) if highest else 10
+    return (highest.order + QUESTION_ORDER_STEP) if highest else QUESTION_ORDER_STEP
 
 
 def register_routes(app):
@@ -158,6 +153,7 @@ def register_routes(app):
     def questions():
         """Daily questions and the closing block on one page, as two views."""
         view = request.args.get("view", "rotation")
+        cohort = current_cohort()
 
         grouped = []
         if view == "rotation":
@@ -186,8 +182,8 @@ def register_routes(app):
                      for root in group["questions"]
                      for q in (root, *root.follow_ups)},
             final_blocked={q.id: final_question_blocker(q) for q in final},
-            in_rotation=[int(t) for t in (current_cohort().categories if current_cohort()
-                                          else DEFAULT_CATEGORY_ORDER)],
+            # Nothing is in rotation without an active cohort to define one.
+            in_rotation=[int(t) for t in (cohort.categories if cohort else [])],
         )
 
     @app.route("/questions/new", methods=["GET", "POST"])
@@ -319,7 +315,10 @@ def register_routes(app):
                 .order_by(FinalQuestion.order.desc())
                 .first()
             )
-            FinalQuestion.create(text=text, order=(highest.order + 10) if highest else 10)
+            FinalQuestion.create(
+                text=text,
+                order=(highest.order + QUESTION_ORDER_STEP) if highest else QUESTION_ORDER_STEP,
+            )
             flash("Підсумкове питання додано.", "ok")
 
         return redirect(url_for("questions", view="final"))
@@ -411,10 +410,10 @@ def register_routes(app):
             "cohort.html",
             cohort=cohort,
             types=list(QuestionType),
-            order=[int(t) for t in cohort.categories] if cohort else
-            [int(t) for t in DEFAULT_CATEGORY_ORDER],
+            # A new cohort starts with no rhythm: the builder below is where it
+            # gets decided, and the preview says plainly what empty means.
+            order=[int(t) for t in cohort.categories] if cohort else [],
             statuses=list(CohortStatus),
-            default_days=CYCLE_LENGTH_DAYS,
             blocked=cohort_blocker(cohort) if cohort else None,
         )
 

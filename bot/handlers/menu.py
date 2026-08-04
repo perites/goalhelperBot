@@ -48,14 +48,18 @@ async def _require_participant(update):
     it can outlive the profile behind it — after an abandoned onboarding, or
     a rebuilt database. Answer those taps politely and clear the stale
     keyboard instead of indexing into a half-filled row.
+
+    A cohort is part of what the menu needs: it shows the day out of the
+    cycle, and there is no cycle without one. Someone left on the waitlist
+    holds a keyboard this screen cannot fill in.
     """
     user = current_user(update)
 
-    if user is not None and user.intention_type is not None:
+    if user is not None and user.intention_type is not None and user.cohort is not None:
         return user
 
     logger.info(
-        "Menu tap from user=%s with no completed profile; clearing keyboard",
+        "Menu tap from user=%s with no cycle to show; clearing keyboard",
         update.effective_user.id,
     )
     await update.message.reply_text(

@@ -1,5 +1,4 @@
 from bot.config import KSENIA_TELEGRAM
-from bot.enums import QuestionType
 
 start_message = '''
 Привіт. Я — “Я хочу бот”.
@@ -252,15 +251,6 @@ cycle_final_intro = '''
 Ось кілька останніх питань. Можеш відповісти на них одним повідомленням — так, як тобі зручно, і тоді, коли буде час.
 '''
 
-# ТЗ §15's five closing questions — seed data for the FinalQuestion table.
-final_questions = [
-    "Що ти краще зрозуміла / зрозумів про свій намір?",
-    "Що тобі вдалося зробити за ці 30 днів?",
-    "Які емоції найчастіше супроводжували твій рух?",
-    "Який маленький крок мав найбільше значення?",
-    "Що ти хочеш продовжити після завершення цього циклу?",
-]
-
 
 def final_questions_block(total, questions):
     numbered = "\n".join(f"{i}. {text}" for i, text in enumerate(questions, start=1))
@@ -331,90 +321,3 @@ question_skipped_message = '''
 question_already_closed_message = '''
 Це питання вже закрите. Наступне прийде у свій час.
 '''
-
-intensity_options = ["1", "2", "3", "4", "5"]
-
-# ТЗ §10.1's eleven emotions, grouped so the keyboard isn't a wall. A nested
-# list is a group: the first item labels it, the rest are its choices. Only
-# the chosen emotion is stored, never the group — the grouping is a way of
-# fitting them on screen, not part of the answer.
-emotion_options = [
-    ["🌱 Радше приємні", "радість", "натхнення", "цікавість", "спокій"],
-    ["🌧 Радше складні", "тривога", "злість", "сум", "втома", "розчарування"],
-    "байдужість",
-]
-
-# Seed data for the question bank, until Ксенія provides the real one.
-#
-#   options      None for an open question; strings, or [label, choice, ...]
-#                for a group of choices behind one button.
-#   free_text    adds a "write your own" button beside the options.
-#   follow_ups   asked one at a time once the parent is answered, and never
-#                offered by the daily rotation.
-sample_questions = [
-    {
-        "text": "Яку емоцію ти зараз відчуваєш стосовно свого наміру?",
-        "type": QuestionType.EMOTION,
-        "options": emotion_options,
-        "free_text": False,
-        "follow_ups": [
-            {
-                "text": "Наскільки сильно ти зараз це відчуваєш?",
-                "type": QuestionType.EMOTION,
-                "options": intensity_options,
-            },
-        ],
-    },
-    {
-        "text": "Що ти сьогодні вже зробила / зробив для свого наміру, навіть якщо це був дуже маленький крок?",
-        "type": QuestionType.STEP,
-    },
-    {
-        "text": "Що зараз може стати для тебе точкою опори в русі до цього наміру?",
-        "type": QuestionType.SUPPORT,
-    },
-    {
-        "text": "За що ти сьогодні можеш себе цінувати в контексті свого наміру?",
-        "type": QuestionType.GRATITUDE,
-    },
-    {
-        "text": "Що зараз найбільше заважає тобі рухатися до цього наміру?",
-        "type": QuestionType.OBSTACLE,
-        # ТЗ §10.5 asks for exactly this follow-up.
-        "follow_ups": [
-            {
-                "text": "Що з цього ти можеш зробити трохи простішим?",
-                "type": QuestionType.OBSTACLE,
-            },
-        ],
-    },
-    {
-        "text": "Яку маленьку перемогу ти можеш сьогодні помітити?",
-        "type": QuestionType.WIN,
-    },
-    {
-        "text": "Що сьогодні важливо не загубити, щоб залишатися в контакті зі своїм наміром?",
-        "type": QuestionType.FOCUS,
-    },
-    {
-        "text": "Який один маленький крок ти можеш зробити сьогодні?",
-        "type": QuestionType.STEP,
-    },
-    {
-        "text": "Яка емоція супроводжує тебе сьогодні найбільше?",
-        "type": QuestionType.EMOTION,
-        "options": emotion_options,
-        "free_text": True,
-        # ТЗ §10.1.
-        "follow_ups": [
-            {
-                "text": "Що ця емоція може тобі підказувати?",
-                "type": QuestionType.EMOTION,
-            },
-        ],
-    },
-    {
-        "text": "Що сьогодні може допомогти тобі зробити хоча б один маленький крок у напрямку цього наміру?",
-        "type": QuestionType.FOCUS,
-    },
-]

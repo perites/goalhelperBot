@@ -1,8 +1,5 @@
 """Cohort enrollment: the joining window, capacity, and the waitlist."""
-from datetime import timedelta
-
 from bot import clock
-from bot.config import DEFAULT_ENROLLMENT_WINDOW_DAYS, DEFAULT_MAX_PEOPLE
 from bot.enums import CohortStatus, EnrollmentState, Status
 from bot.logs import get_logger
 from bot.models import Cohort, User
@@ -14,29 +11,17 @@ logger = get_logger(__name__)
 SEAT_STATUSES = (Status.ACTIVE, Status.PAUSED, Status.FINISHED, Status.STOPPED)
 
 
-def seed_default_cohort():
-    """Create a cohort if none exists, so the bot works out of the box."""
-    if Cohort.select().exists():
-        return Cohort.select().first()
+def active_participants():
+    """Users the bot still runs a cycle for.
 
-    today = clock.today_kyiv()
-
-    cohort = Cohort.create(
-        name="Пілот",
-        is_active=True,
-        enrollment_opens=today,
-        enrollment_closes=today + timedelta(days=DEFAULT_ENROLLMENT_WINDOW_DAYS),
-        max_people=DEFAULT_MAX_PEOPLE,
-        status=CohortStatus.ENROLLING,
+    Being in a cohort is part of the definition, not an extra check: cycle
+    length, the daily total, and the category rhythm are all read from it, so
+    someone outside a cohort has no cycle to run. Filtering here is what keeps
+    CohortMissing a genuine "should never happen" rather than a control flow.
+    """
+    return User.select().where(
+        (User.status == Status.ACTIVE) & User.cohort.is_null(False)
     )
-
-    logger.warning(
-        "No cohort existed; created a default one open %s..%s with %s seats. "
-        "Set real dates before the pilot starts.",
-        cohort.enrollment_opens, cohort.enrollment_closes, cohort.max_people,
-    )
-
-    return cohort
 
 
 def current_cohort():

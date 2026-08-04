@@ -7,7 +7,6 @@ so can't complete a cycle.
 import os
 from datetime import time
 
-from bot.enums import QuestionType
 
 # --- Storage ---------------------------------------------------------------
 
@@ -25,16 +24,9 @@ TIMEZONE = "Europe/Kyiv"
 
 # --- Personal cycle --------------------------------------------------------
 
-CYCLE_LENGTH_DAYS = 30
-
 # A pause expires on its own after this many days, even if never resumed.
 # Paused days don't count toward the cycle, so the finish line moves out.
 PAUSE_DURATION_DAYS = 3
-
-# --- Cohort ----------------------------------------------------------------
-
-DEFAULT_MAX_PEOPLE = 10
-DEFAULT_ENROLLMENT_WINDOW_DAYS = 14
 
 # --- Scheduler -------------------------------------------------------------
 
@@ -66,46 +58,11 @@ SLOT_TIMES = [
 SLOT_MORNING_UNTIL_HOUR = 12
 SLOT_EVENING_FROM_HOUR = 17
 
-# Seed value for Cohort.questions_per_day — read that, not this, at runtime.
-#
-# How many questions someone receives per day, spread across whichever slots
-# they chose. Timing is the participant's choice; volume is the programme's.
-#
-# Two things it is not:
-#   - not a hard cap: every chosen slot is floored at one question, so picking
-#     more slots than this number raises the daily total rather than leaving a
-#     slot you asked for silent;
-#   - not a guarantee: a slot's run only advances when a question is answered,
-#     so going quiet ends the day early.
-DEFAULT_QUESTIONS_PER_DAY = 3
-
 # --- Questions -------------------------------------------------------------
 
 # Gap left between the `order` values of a question's follow-ups, so another
 # can be slotted in later without renumbering.
 QUESTION_ORDER_STEP = 10
-
-# Seed value for Cohort.category_order — read `cohort.categories` at runtime.
-#
-# The rhythm of the daily questions. Each send takes the next category here
-# and picks a question of that type; after the last it wraps to the first, so
-# the cycle runs continuously rather than restarting each day.
-#
-# A category may appear more than once to make it come round more often.
-# Categories with no questions yet are skipped, so it's safe to list one
-# before writing its questions.
-#
-# Note the interaction with questions_per_day: when the two lengths match,
-# every day has the same shape (emotion, then a step, then gratitude). When
-# they differ, the pattern rotates across days instead.
-DEFAULT_CATEGORY_ORDER = [
-    QuestionType.EMOTION,
-    QuestionType.STEP,
-    QuestionType.GRATITUDE,
-]
-
-# Stored form: comma-joined QuestionType values.
-DEFAULT_CATEGORY_ORDER_CSV = ",".join(str(int(t)) for t in DEFAULT_CATEGORY_ORDER)
 
 # How many of the most frequent emotions the statistics screen lists.
 TOP_EMOTIONS_SHOWN = 3

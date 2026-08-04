@@ -7,16 +7,9 @@ from peewee import (
 )
 
 from bot import clock
-from bot.config import (
-    DATABASE_NAME,
-    CYCLE_LENGTH_DAYS,
-    DEFAULT_CATEGORY_ORDER,
-    DEFAULT_CATEGORY_ORDER_CSV,
-    DEFAULT_MAX_PEOPLE,
-    DEFAULT_QUESTIONS_PER_DAY,
-    PAUSE_DURATION_DAYS,
-)
+from bot.config import DATABASE_NAME, PAUSE_DURATION_DAYS
 from bot.enums import CohortStatus, QuestionType
+from bot.errors import CohortMissing
 
 # SQLite ignores foreign keys unless asked to enforce them, per connection.
 # With this on, every reference below is a real constraint: the database
@@ -45,24 +38,31 @@ class Cohort(BaseModel):
 
     enrollment_opens = DateField()
     enrollment_closes = DateField()
-    duration_days = IntegerField(default=CYCLE_LENGTH_DAYS)
-    max_people = IntegerField(default=DEFAULT_MAX_PEOPLE)
+    # No defaults on the four settings below: every cohort states its own
+    # shape. A cohort created without them is a cohort nobody decided about,
+    # and the participants attached to it would inherit that silence.
+    duration_days = IntegerField()
+    max_people = IntegerField()
     status = IntegerField(default=CohortStatus.PLANNED)
 
     # How many questions a participant gets per day, spread across the slots
-    # they picked. See config.DEFAULT_QUESTIONS_PER_DAY for the caveats.
-    questions_per_day = IntegerField(default=DEFAULT_QUESTIONS_PER_DAY)
+    # they picked. Each chosen slot gets at least one, so more slots than this
+    # raises the day's real total.
+    questions_per_day = IntegerField()
 
     # The rhythm of the daily questions, as QuestionType values joined by
     # commas — "0,1,3". Integers rather than names so an admin panel can render
     # them as a picker without parsing prose.
-    category_order = CharField(default=DEFAULT_CATEGORY_ORDER_CSV)
+    category_order = CharField()
 
     @property
     def categories(self):
-        """The category order as QuestionType values. Unknown or malformed
-        entries are dropped rather than raising, so a bad edit degrades to a
-        shorter cycle instead of stopping every send."""
+        """The category order as QuestionType values.
+
+        Unknown or malformed entries are dropped rather than raising, so a bad
+        edit costs the entries it broke and not every send. An order that
+        parses to nothing sends nothing — the panel shows that plainly while
+        you are editing it."""
         known = {member.value for member in QuestionType}
         parsed = []
 
@@ -71,7 +71,7 @@ class Cohort(BaseModel):
             if part.isdigit() and int(part) in known:
                 parsed.append(QuestionType(int(part)))
 
-        return parsed or list(DEFAULT_CATEGORY_ORDER)
+        return parsed
 
 
 class User(BaseModel):
@@ -117,7 +117,13 @@ class User(BaseModel):
 
     @property
     def cycle_length(self) -> int:
-        return self.cohort.duration_days if self.cohort else CYCLE_LENGTH_DAYS
+        """How long this participant's cycle runs. Read from their cohort —
+        there is no length for someone outside one, so this raises rather than
+        inventing a number that other dates would then be measured against."""
+        if self.cohort is None:
+            raise CohortMissing(self, "cycle length")
+
+        return self.cohort.duration_days
 
     @property
     def cycle_day(self) -> int:

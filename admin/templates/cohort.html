@@ -42,7 +42,7 @@
         <div class="row">
           <label>Тривалість циклу, днів</label>
           <input type="number" name="duration_days" min="1"
-                 value="{{ cohort.duration_days if cohort else default_days }}" required>
+                 value="{{ cohort.duration_days if cohort else 30 }}" required>
         </div>
       </div>
 
