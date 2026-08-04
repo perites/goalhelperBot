@@ -38,6 +38,18 @@ def main():
             "ADMIN_PANEL_PASSWORD is not set — refusing to start without a password."
         )
 
+    if not os.getenv("ADMIN_SECRET_KEY"):
+        logger.critical("ADMIN_SECRET_KEY is not set; refusing to start")
+        raise SystemExit(
+            "ADMIN_SECRET_KEY is not set — refusing to start.\n"
+            "\n"
+            "Sessions are signed with it, so without one the panel invents a new\n"
+            "key on every start and logs you out each time it restarts.\n"
+            "\n"
+            "Generate one and add it to .env:\n"
+            '    python -c "import secrets; print(secrets.token_hex(32))"'
+        )
+
     logger.info("Admin panel listening on http://%s:%s", ADMIN_HOST, ADMIN_PORT)
 
     create_app().run(host=ADMIN_HOST, port=ADMIN_PORT)

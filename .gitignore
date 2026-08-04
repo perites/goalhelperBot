@@ -1,4 +1,7 @@
 /goalbot.db
+/goalbot.db-wal
+/goalbot.db-shm
+/ptb_state.pickle
 /.venv/
 /.env
 /.idea/

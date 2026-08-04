@@ -274,6 +274,14 @@ onboarding_conv_handler = ConversationHandler(
     },
     fallbacks=[CommandHandler("cancel", cancel)],
 
+    # Survives a restart. Every button below is registered only inside this
+    # conversation, so without the state on disk a restart mid-onboarding
+    # leaves the participant tapping buttons that match no handler at all.
+    # `name` is what the state is filed under, and changing it abandons
+    # whatever is already stored.
+    persistent=True,
+    name="onboarding",
+
     # Without this, tapping "Почати" a second time is silently dropped:
     # entry points are only consulted when the user isn't already inside a
     # conversation, so someone part-way through onboarding has no way back to

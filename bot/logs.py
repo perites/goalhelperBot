@@ -31,6 +31,11 @@ ROOT_LOGGER_NAME = "bot"
 # Telegram caps messages at 4096 characters.
 MAX_ALERT_LENGTH = 3500
 
+# How many pre-startup records to hold until there is a bot to send them with.
+# Bounded because nothing guarantees one ever arrives — if startup fails before
+# `bind`, these are simply dropped, and the journal is where they live instead.
+MAX_PENDING_ALERTS = 50
+
 
 def get_logger(name):
     """Logger for a module, namespaced under the bot root."""
@@ -62,11 +67,25 @@ class TelegramAlertHandler(logging.Handler):
         self._seen = {}
         self._sent_at = deque()
         self._dropped = 0
+        self._pending = deque(maxlen=MAX_PENDING_ALERTS)
 
     def bind(self, bot, loop):
-        """Called once the event loop is running (from post_init)."""
+        """Called once the event loop is running (from post_init).
+
+        Anything logged before this point — during `configure_logging`, opening
+        the database, or applying a migration — happened when there was no bot
+        to send with. Those are held and delivered here, since a problem during
+        startup is exactly the kind someone wants to hear about.
+
+        One thing this cannot rescue: a missing BOT_TOKEN. There is no Telegram
+        without one, so that message reaches the journal and nowhere else.
+        """
         self._bot = bot
         self._loop = loop
+
+        held, self._pending = list(self._pending), deque(maxlen=MAX_PENDING_ALERTS)
+        for record in held:
+            self.emit(record)
 
     @staticmethod
     def _fingerprint(record):
@@ -140,10 +159,13 @@ class TelegramAlertHandler(logging.Handler):
                 sys.stderr.write(f"alert delivery to {chat_id} failed: {error!r}\n")
 
     def emit(self, record):
-        if self._bot is None or self._loop is None or not self._loop.is_running():
+        if not admin_chat_ids():
             return
 
-        if not admin_chat_ids():
+        if self._bot is None or self._loop is None or not self._loop.is_running():
+            # Too early: hold it for `bind`. The deque is bounded, so a startup
+            # that never gets there costs nothing.
+            self._pending.append(record)
             return
 
         try:

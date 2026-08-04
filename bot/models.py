@@ -10,13 +10,39 @@ from bot import clock
 from bot.config import DATABASE_NAME, PAUSE_DURATION_DAYS
 from bot.enums import CohortStatus, QuestionType
 from bot.errors import CohortMissing
+from bot.migrations import apply_migrations, latest_version, stamp
 
-# SQLite ignores foreign keys unless asked to enforce them, per connection.
-# With this on, every reference below is a real constraint: the database
-# refuses to delete a row that something else still points at, so the rules in
-# services/deletion.py have a backstop underneath them — including against
-# writes that never go through this code at all, like sqlite-web.
-db = SqliteDatabase(DATABASE_NAME, pragmas={"foreign_keys": 1})
+# Three processes share this file: the bot holds a connection for as long as it
+# runs, the panel opens one per request, and sqlite-web browses it.
+#
+#   foreign_keys   SQLite ignores foreign keys unless asked to enforce them,
+#                  per connection. With this on, every reference below is a
+#                  real constraint: the database refuses to delete a row that
+#                  something else still points at, so the rules in
+#                  services/deletion.py have a backstop underneath them —
+#                  including against writes that never go through this code at
+#                  all, like sqlite-web.
+#
+#   journal_mode   Without WAL, a writer takes an exclusive lock on the whole
+#                  database and readers wait behind it. With three processes
+#                  that surfaces as "database is locked" under no particular
+#                  load — a failed send inside the hourly tick, or a 500 in the
+#                  panel. WAL lets readers carry on while one writer works. The
+#                  setting lives in the file header, so it survives restarts and
+#                  applies to every process that opens it.
+#
+#   busy_timeout   How long to wait for a lock before giving up, in ms. The
+#                  writes here are small and rare; five seconds is far more
+#                  than any of them need and much less than a person notices.
+#
+# WAL keeps -wal and -shm files beside the database, so the service needs the
+# *directory* writable, not just the file. deploy/goalbot.service already grants
+# that, and says why.
+db = SqliteDatabase(DATABASE_NAME, pragmas={
+    "foreign_keys": 1,
+    "journal_mode": "wal",
+    "busy_timeout": 5000,
+})
 
 
 class BaseModel(Model):
@@ -268,8 +294,23 @@ class FinalAnswer(BaseModel):
 
 
 def initialize_database():
-    db.connect()
+    """Make the database ready to use: create what's missing, migrate the rest.
+
+    Both entry points call this, and either may be the one that runs first.
+    """
+    db.connect(reuse_if_open=True)
+
+    # Checked before create_tables, because after it the answer is always "no".
+    # A file with no tables is about to be given today's schema directly, so it
+    # is born up to date and its history must not be replayed onto it.
+    fresh = not db.get_tables()
+
     db.create_tables(
         [Cohort, User, UserTime, Question, Answer, FinalQuestion, FinalAnswer],
         safe=True,
     )
+
+    if fresh:
+        stamp(db, latest_version())
+    else:
+        apply_migrations(db)

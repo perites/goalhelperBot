@@ -71,9 +71,21 @@ def _attach_logging(app):
 
 def create_app():
     app = Flask(__name__)
-    app.secret_key = os.getenv("ADMIN_SECRET_KEY") or secrets.token_hex(32)
 
     _attach_logging(app)
+
+    secret = os.getenv("ADMIN_SECRET_KEY")
+    if not secret:
+        # Sessions are signed with this, so a fresh random key on every start
+        # means every restart logs the admin out. admin_panel.py refuses to
+        # start without one for that reason; it is tolerated here so tests and
+        # one-off scripts can build an app without the ceremony.
+        logger.warning(
+            "ADMIN_SECRET_KEY is not set; sessions will not survive a restart"
+        )
+        secret = secrets.token_hex(32)
+
+    app.secret_key = secret
 
     # peewee connections aren't shared safely between threads, and Flask
     # serves requests on several — so each request gets its own.

@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from telegram.ext import Application
+from telegram.ext import Application, PicklePersistence
 
-from bot.config import admin_chat_ids
+from bot.config import DATA_DIR, admin_chat_ids
 from bot.logs import alert_handler, configure_logging, get_logger
 
 from bot.handlers.answers import (
@@ -38,6 +38,29 @@ from bot.models import initialize_database
 from bot.services.scheduler import schedule
 
 logger = get_logger(__name__)
+
+PERSISTENCE_PATH = os.path.join(DATA_DIR, "ptb_state.pickle")
+
+
+def build_persistence():
+    """Conversation state and user_data, kept across restarts.
+
+    Answering a question already survives a restart, because the pending Answer
+    row in the database is the state. Onboarding is the exception, and it fails
+    badly: the buttons for consent, category, confirmation and the time slots
+    are registered *only inside* the conversation, so once its state is gone
+    those taps match no handler anywhere in the application and are discarded
+    in silence. The participant taps «✅ Погоджуюсь», nothing happens, and
+    nothing tells them that /start would put it right. With Restart=always in
+    the unit file and a 30-day pilot, that is a question of when rather than if.
+
+    It carries `user_data` too, so a half-made slot selection is still there
+    afterwards instead of resetting to an empty set on the next tap.
+
+    The file holds names and intentions typed during onboarding — the same kind
+    of data as the database, kept beside it and needing the same care.
+    """
+    return PicklePersistence(filepath=PERSISTENCE_PATH)
 
 
 def register_handlers(app):
@@ -110,6 +133,7 @@ def main():
     app = (
         Application.builder()
         .token(token)
+        .persistence(build_persistence())
         .post_init(on_startup)
         .post_shutdown(on_shutdown)
         .build()
