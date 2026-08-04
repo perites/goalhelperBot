@@ -2,12 +2,12 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CommandHandler, ContextTypes
 
-from app.enums import EnrollmentState, Status
-from app.logs import get_logger
-from app.handlers.menu import main_menu_keyboard
-from app.models import User
-from app.services.cohort import enrollment_state, put_on_waitlist
-from app.texts import (
+from bot.enums import EnrollmentState, Status
+from bot.handlers.menu import main_menu_keyboard
+from bot.logs import get_logger
+from bot.models import User
+from bot.services.cohort import enrollment_state, put_on_waitlist
+from bot.texts import (
     cohort_already_stopped_message,
     cohort_finished_message,
     cohort_waitlist_closed_message,
@@ -32,7 +32,6 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         telegram_id=update.effective_user.id,
         defaults={"status": Status.ONBOARDING, "username": update.effective_user.username},
     )
-
 
     # Re-running onboarding would reset an active participant's cycle, so just
     # restore their menu instead.

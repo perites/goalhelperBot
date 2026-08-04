@@ -11,12 +11,12 @@ from telegram.ext import (
     filters, CallbackQueryHandler,
 )
 
-from app.config import CONTINUE_ACTION, EDIT_TIME_PREFIX
-from app.enums import Status
-from app.logs import get_logger
-from app.services.cycle import pause_user, resume_user
-from app.services.questions import close_open_answers
-from app.services.slots import (
+from bot.config import CONTINUE_ACTION, EDIT_TIME_PREFIX
+from bot.enums import Status
+from bot.logs import get_logger
+from bot.services.cycle import pause_user, resume_user
+from bot.services.questions import close_open_answers
+from bot.services.slots import (
     build_slots_keyboard,
     format_slots,
     save_slots,
@@ -24,9 +24,9 @@ from app.services.slots import (
     slot_from_callback,
     toggle_slot,
 )
-from app.services.stats import build_stats_text
-from app.texts import *
-from app.utils import current_user
+from bot.services.stats import build_stats_text
+from bot.texts import *
+from bot.utils import current_user
 
 logger = get_logger(__name__)
 

@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from admin.app import create_app
-from app.models import initialize_database
+from bot.models import initialize_database
 
 ADMIN_HOST = "127.0.0.1"
 ADMIN_PORT = int(os.getenv("ADMIN_PANEL_PORT", "8082"))

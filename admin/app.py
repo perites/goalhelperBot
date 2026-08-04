@@ -5,7 +5,7 @@ import json
 import os
 import secrets
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import wraps
 from pathlib import Path
 
@@ -14,22 +14,21 @@ from flask import (
     send_from_directory, session, url_for,
 )
 
-from app import clock, models
-from app.config import (
+from bot import clock, models
+from bot.config import (
     CYCLE_LENGTH_DAYS,
     DEFAULT_CATEGORY_ORDER,
     LOG_DIR,
     LOG_FILE_NAME,
 )
-from app.enums import CohortStatus, EnrollmentState, QuestionType, Status
-from app.models import (
-    Answer, Cohort, FinalAnswer, FinalQuestion, Question, User, UserTime,
-)
-from app.services.cohort import (
+from bot.enums import CohortStatus, QuestionType, Status
+from bot.models import (
+    Answer, Cohort, FinalAnswer, FinalQuestion, Question, User, )
+from bot.services.cohort import (
     activate_cohort, current_cohort, enrollment_state, seats_left, seats_taken,
 )
-from app.services.cycle import finish_user, pause_user, resume_user
-from app.services.deletion import (
+from bot.services.cycle import finish_user, pause_user, resume_user
+from bot.services.deletion import (
     DeletionBlocked,
     cohort_blocker,
     delete_cohort,
@@ -38,8 +37,8 @@ from app.services.deletion import (
     final_question_blocker,
     question_blocker,
 )
-from app.services.slots import format_slots, saved_slots
-from app.services.stats import answered_count, skipped_count, top_emotions
+from bot.services.slots import format_slots, saved_slots
+from bot.services.stats import answered_count, skipped_count, top_emotions
 
 LOG_TAIL_LINES = 400
 
@@ -99,7 +98,6 @@ def _next_order():
 
 
 def register_routes(app):
-
     # --- auth --------------------------------------------------------------
 
     @app.route("/login", methods=["GET", "POST"])
@@ -235,7 +233,7 @@ def register_routes(app):
             parents=[
                 {"id": q.id, "text": q.text, "type": q.type}
                 for q in Question.select().where(Question.parent.is_null(True))
-                         .order_by(Question.type, Question.order)
+                .order_by(Question.type, Question.order)
                 if question is None or q.id != question.id
             ],
             blocked=question_blocker(question) if question else None,
@@ -414,7 +412,7 @@ def register_routes(app):
             cohort=cohort,
             types=list(QuestionType),
             order=[int(t) for t in cohort.categories] if cohort else
-                  [int(t) for t in DEFAULT_CATEGORY_ORDER],
+            [int(t) for t in DEFAULT_CATEGORY_ORDER],
             statuses=list(CohortStatus),
             default_days=CYCLE_LENGTH_DAYS,
             blocked=cohort_blocker(cohort) if cohort else None,

@@ -8,10 +8,10 @@ load_dotenv()
 
 from telegram.ext import Application
 
-from app.config import admin_chat_ids
-from app.logs import alert_handler, configure_logging, get_logger
+from bot.config import admin_chat_ids
+from bot.logs import alert_handler, configure_logging, get_logger
 
-from app.handlers.answers import (
+from bot.handlers.answers import (
     answer_button_handler,
     answer_text_handler,
     ask_command_handler,
@@ -19,8 +19,8 @@ from app.handlers.answers import (
     option_button_handler,
     skip_button_handler,
 )
-from app.handlers.errors import error_handler
-from app.handlers.menu import (
+from bot.handlers.errors import error_handler
+from bot.handlers.menu import (
     contacts_handler,
     edit_time_save_handler,
     edit_time_toggle_handler,
@@ -32,12 +32,12 @@ from app.handlers.menu import (
     pause_handler,
     stats_handler,
 )
-from app.handlers.onboarding import onboarding_conv_handler
-from app.handlers.start import start_handler
-from app.models import initialize_database
-from app.services.cohort import seed_default_cohort
-from app.services.questions import seed_questions
-from app.services.scheduler import schedule
+from bot.handlers.onboarding import onboarding_conv_handler
+from bot.handlers.start import start_handler
+from bot.models import initialize_database
+from bot.services.cohort import seed_default_cohort
+from bot.services.questions import seed_questions
+from bot.services.scheduler import schedule
 
 logger = get_logger(__name__)
 

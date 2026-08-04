@@ -1,5 +1,3 @@
-from app import clock
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram import Update
 from telegram.ext import (
@@ -10,22 +8,23 @@ from telegram.ext import (
     filters, CallbackQueryHandler,
 )
 
-from app.services.cohort import join_cohort, put_on_waitlist
-from app.config import CONTINUE_ACTION, TIME_SLOT_PREFIX
-from app.models import User
-from app.enums import Status
-from app.logs import describe, get_logger
-from app.services.questions import deliver_question
-from app.utils import current_user, get_message
-from app.handlers.menu import main_menu_keyboard
-from app.texts import *
-from app.services.slots import (
+from bot import clock
+from bot.config import CONTINUE_ACTION, TIME_SLOT_PREFIX
+from bot.enums import Status
+from bot.handlers.menu import main_menu_keyboard
+from bot.logs import describe, get_logger
+from bot.models import User
+from bot.services.cohort import join_cohort, put_on_waitlist
+from bot.services.questions import deliver_question
+from bot.services.slots import (
     build_slots_keyboard,
     format_slots,
     save_slots,
     slot_from_callback,
     toggle_slot,
 )
+from bot.texts import *
+from bot.utils import current_user, get_message
 
 logger = get_logger(__name__)
 
@@ -281,4 +280,3 @@ onboarding_conv_handler = ConversationHandler(
     # the start and the button just appears dead.
     allow_reentry=True,
 )
-

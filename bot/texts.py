@@ -1,5 +1,5 @@
-from app.config import KSENIA_TELEGRAM
-from app.enums import QuestionType
+from bot.config import KSENIA_TELEGRAM
+from bot.enums import QuestionType
 
 start_message = '''
 Привіт. Я — “Я хочу бот”.

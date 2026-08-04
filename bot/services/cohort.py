@@ -1,11 +1,11 @@
 """Cohort enrollment: the joining window, capacity, and the waitlist."""
 from datetime import timedelta
 
-from app import clock
-from app.config import DEFAULT_ENROLLMENT_WINDOW_DAYS, DEFAULT_MAX_PEOPLE
-from app.enums import CohortStatus, EnrollmentState, Status
-from app.logs import get_logger
-from app.models import Cohort, User
+from bot import clock
+from bot.config import DEFAULT_ENROLLMENT_WINDOW_DAYS, DEFAULT_MAX_PEOPLE
+from bot.enums import CohortStatus, EnrollmentState, Status
+from bot.logs import get_logger
+from bot.models import Cohort, User
 
 logger = get_logger(__name__)
 

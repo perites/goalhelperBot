@@ -7,10 +7,10 @@ its values ("7") would rank alongside real emotions in "найчастіші е�
 """
 from collections import Counter
 
-from app.config import TOP_EMOTIONS_SHOWN
-from app.models import Question, Answer
-from app.enums import QuestionType
-from app.texts import menu_stats_template, menu_stats_no_emotions
+from bot.config import TOP_EMOTIONS_SHOWN
+from bot.enums import QuestionType
+from bot.models import Question, Answer
+from bot.texts import menu_stats_template, menu_stats_no_emotions
 
 
 def answered_count(user, question_type=None):

@@ -12,13 +12,13 @@ from telegram.ext import (
     filters,
 )
 
-from app import clock
-from app.config import BACK_ACTION
-from app.enums import Status
-from app.logs import describe, get_logger
-from app.models import Answer, User
-from app.services.cycle import complete_cycle, reached_final_day, send_closing_summary
-from app.services.questions import (
+from bot import clock
+from bot.config import BACK_ACTION
+from bot.enums import Status
+from bot.logs import describe, get_logger
+from bot.models import Answer, User
+from bot.services.cycle import complete_cycle, reached_final_day, send_closing_summary
+from bot.services.questions import (
     build_question_keyboard,
     deliver_question,
     option_at,
@@ -29,14 +29,14 @@ from app.services.questions import (
     show_resolved_answer,
     show_resolved_final_answer,
 )
-from app.texts import (
+from bot.texts import (
     main_menu_buttons,
     question_already_closed_message,
     question_answer_prompt,
     question_saved_message,
     question_skipped_message,
 )
-from app.utils import current_user
+from bot.utils import current_user
 
 logger = get_logger(__name__)
 
@@ -266,4 +266,3 @@ answer_text_handler = MessageHandler(
     filters.TEXT & ~filters.COMMAND & ~filters.Text(main_menu_buttons),
     handle_answer_text,
 )
-

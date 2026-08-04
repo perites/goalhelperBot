@@ -1,13 +1,13 @@
 """All tunable settings for the bot, in one place.
 
 Everything else imports this module, so it must not import anything back —
-with the single exception of `app.enums`, which is itself dependency-free and
+with the single exception of `bot.enums`, which is itself dependency-free and
 so can't complete a cycle.
 """
 import os
 from datetime import time
 
-from app.enums import QuestionType
+from bot.enums import QuestionType
 
 # --- Storage ---------------------------------------------------------------
 

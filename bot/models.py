@@ -6,9 +6,8 @@ from peewee import (
     BooleanField, SQL, DateField, DateTimeField, ForeignKeyField, TimeField,
 )
 
-from app import clock
-from app.enums import CohortStatus, QuestionType
-from app.config import (
+from bot import clock
+from bot.config import (
     DATABASE_NAME,
     CYCLE_LENGTH_DAYS,
     DEFAULT_CATEGORY_ORDER,
@@ -17,6 +16,7 @@ from app.config import (
     DEFAULT_QUESTIONS_PER_DAY,
     PAUSE_DURATION_DAYS,
 )
+from bot.enums import CohortStatus, QuestionType
 
 # SQLite ignores foreign keys unless asked to enforce them, per connection.
 # With this on, every reference below is a real constraint: the database

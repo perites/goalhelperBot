@@ -1,7 +1,7 @@
 """Small helpers shared across handlers."""
 from telegram import MaybeInaccessibleMessage, Message, Update
 
-from app.models import User
+from bot.models import User
 
 
 def get_message(update: Update) -> Message | MaybeInaccessibleMessage:

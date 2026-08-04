@@ -3,17 +3,17 @@
 Splitting this from cohort.py lets it depend on the questions service without
 a cycle, which is what the function-level imports used to work around.
 """
-from app import clock
-from app.enums import Status
-from app.logs import get_logger
-from app.models import User
-from app.services.questions import (
+from bot import clock
+from bot.enums import Status
+from bot.logs import get_logger
+from bot.models import User
+from bot.services.questions import (
     close_open_answers,
     has_received_closing_block,
     send_closing_block,
 )
-from app.services.stats import build_stats_text
-from app.texts import cycle_final_invite_message, cycle_final_summary_intro
+from bot.services.stats import build_stats_text
+from bot.texts import cycle_final_invite_message, cycle_final_summary_intro
 
 logger = get_logger(__name__)
 

@@ -10,14 +10,14 @@ from datetime import datetime
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from app.config import (
+from bot.config import (
     CONTINUE_ACTION,
     DEFAULT_QUESTIONS_PER_DAY,
     SLOT_EVENING_FROM_HOUR,
     SLOT_TIMES,
     SLOT_MORNING_UNTIL_HOUR,
 )
-from app.models import UserTime
+from bot.models import UserTime
 
 SLOT_FORMAT = "%H:%M"
 

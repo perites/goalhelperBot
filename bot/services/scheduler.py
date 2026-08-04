@@ -11,20 +11,20 @@ from datetime import timedelta
 
 from telegram.ext import ContextTypes
 
-from app import clock
-from app.config import SWEEP_HOUR, TICK_INTERVAL_HOURS
-from app.enums import Status
-from app.logs import get_logger
-from app.models import User, UserTime
-from app.services.cohort import cohort_is_complete, current_cohort, end_cohort
-from app.services.cycle import (
+from bot import clock
+from bot.config import SWEEP_HOUR, TICK_INTERVAL_HOURS
+from bot.enums import Status
+from bot.logs import get_logger
+from bot.models import User, UserTime
+from bot.services.cohort import cohort_is_complete, current_cohort, end_cohort
+from bot.services.cycle import (
     complete_cycle,
     resume_user,
     users_due_for_completion,
     users_with_expired_pause,
 )
-from app.services.questions import deliver_question, sent_in_slot_today
-from app.services.slots import slot_id
+from bot.services.questions import deliver_question, sent_in_slot_today
+from bot.services.slots import slot_id
 
 logger = get_logger(__name__)
 

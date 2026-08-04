@@ -11,9 +11,9 @@ panel calls them to grey out its buttons, but that is a courtesy — the
 `delete_*` functions re-run the same check inside the deleting transaction, so
 a hand-made POST hits the identical guard.
 """
-from app.enums import Status
-from app.logs import get_logger
-from app.models import Answer, Cohort, FinalAnswer, FinalQuestion, Question, User, db
+from bot.enums import Status
+from bot.logs import get_logger
+from bot.models import Answer, FinalAnswer, User, db
 
 logger = get_logger(__name__)
 

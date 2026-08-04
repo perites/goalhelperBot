@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from app import clock
-from app.config import (
+from bot import clock
+from bot.config import (
     BACK_ACTION,
     DEFAULT_CATEGORY_ORDER,
     DEFAULT_QUESTIONS_PER_DAY,
@@ -18,10 +18,10 @@ from app.config import (
     QUESTION_ORDER_STEP,
     SHORT_OPTION_LENGTH,
 )
-from app.logs import get_logger
-from app.models import Answer, FinalAnswer, FinalQuestion, Question
-from app.services.slots import questions_per_slot, saved_slots
-from app.texts import (
+from bot.logs import get_logger
+from bot.models import Answer, FinalAnswer, FinalQuestion, Question
+from bot.services.slots import questions_per_slot, saved_slots
+from bot.texts import (
     final_questions,
     final_questions_block,
     question_answer_button,
@@ -136,7 +136,7 @@ def pick_from_category(user, category, rng=None):
     # datetime.min sentinel below.
     last_seen = {}
     for row in Answer.select(Answer.question, Answer.sent_at).where(
-        (Answer.user == user) & Answer.parent.is_null(True)
+            (Answer.user == user) & Answer.parent.is_null(True)
     ):
         seen = last_seen.get(row.question_id)
         if seen is None or row.sent_at > seen:
@@ -565,4 +565,3 @@ async def show_resolved_final_answer(bot, final_answer):
             answer=final_answer.answer
         ),
     )
-

@@ -13,7 +13,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from app.config import (
+from bot.config import (
     ALERT_DEDUPE_WINDOW_SECONDS,
     ALERT_LEVEL,
     ALERT_MAX_PER_MINUTE,
@@ -26,15 +26,15 @@ from app.config import (
     admin_chat_ids,
 )
 
-ROOT_LOGGER_NAME = "app"
+ROOT_LOGGER_NAME = "bot"
 
 # Telegram caps messages at 4096 characters.
 MAX_ALERT_LENGTH = 3500
 
 
 def get_logger(name):
-    """Logger for a module, namespaced under the app root."""
-    suffix = name.removeprefix("app.") if name.startswith("app.") else name
+    """Logger for a module, namespaced under the bot root."""
+    suffix = name.removeprefix("bot.") if name.startswith("bot.") else name
 
     return logging.getLogger(f"{ROOT_LOGGER_NAME}.{suffix}")
 
