@@ -9,6 +9,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 logs/
-/tests/
 /deploy/
 data/
