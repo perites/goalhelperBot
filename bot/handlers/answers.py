@@ -12,23 +12,23 @@ from telegram.ext import (
     filters,
 )
 
-from bot import clock
-from bot.config import BACK_ACTION, admin_chat_ids
-from bot.enums import Status
-from bot.logs import describe, get_logger
-from bot.models import Answer, User
-from bot.services.cycle import complete_cycle, reached_final_day, send_closing_summary
-from bot.services.questions import (
-    build_question_keyboard,
-    deliver_question,
-    option_at,
-    send_follow_up,
-    send_next_in_slot,
-    pending_answer,
-    pending_final_answer,
-    show_resolved_answer,
-    show_resolved_final_answer,
+from bot import callbacks
+from bot.closing import (
+    complete_cycle, send_closing_summary, show_resolved_final_answer,
 )
+from bot.delivery import (
+    deliver_question, send_follow_up, send_next_in_slot, show_resolved_answer,
+)
+from bot.keyboards import build_question_keyboard
+from core import clock
+from core.enums import Status
+from core.logs import describe, get_logger
+from core.models import Answer, User
+from core.services.cycle import reached_final_day
+from core.services.questions import (
+    option_at, pending_answer, pending_final_answer,
+)
+from core.settings import admin_chat_ids
 from bot.texts import (
     main_menu_buttons,
     question_already_closed_message,
@@ -41,14 +41,43 @@ from bot.utils import current_user
 logger = get_logger(__name__)
 
 
-def _resolvable_answer(answer_id):
-    """The Answer row for this callback, or None if it's already resolved."""
+def _resolvable_answer(data):
+    """The Answer a callback names, or None if it is gone or already resolved.
+
+    The id travels to Telegram and back, so it is parsed rather than trusted —
+    an old chat can hand back anything it still has on screen.
+    """
+    parts = callbacks.parts(data)
+
+    try:
+        answer_id = int(parts[0])
+    except (IndexError, ValueError):
+        return None
+
     answer = Answer.get_or_none(Answer.id == answer_id)
 
     if answer is None or answer.answered_at is not None or answer.skipped:
         return None
 
     return answer
+
+
+async def _resolve_or_close(query):
+    """The Answer this tap is about — or None, having told the participant the
+    question is closed and cleared the dead buttons.
+
+    Every button handler opens this way, because a stale keyboard is the normal
+    case rather than an edge one: the buttons live in the chat and outlive
+    whatever they pointed at.
+    """
+    answer = _resolvable_answer(query.data)
+    if answer is not None:
+        return answer
+
+    await query.edit_message_reply_markup(reply_markup=None)
+    await query.message.reply_text(question_already_closed_message)
+
+    return None
 
 
 async def _hand_off_if_final_day(bot, user):
@@ -82,9 +111,7 @@ async def handle_answer_button(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
 
-    if _resolvable_answer(int(query.data.split(":")[1])) is None:
-        await query.edit_message_reply_markup(reply_markup=None)
-        await query.message.reply_text(question_already_closed_message)
+    if await _resolve_or_close(query) is None:
         return
 
     await query.message.reply_text(question_answer_prompt)
@@ -94,10 +121,8 @@ async def handle_skip_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
 
-    answer = _resolvable_answer(int(query.data.split(":")[1]))
+    answer = await _resolve_or_close(query)
     if answer is None:
-        await query.edit_message_reply_markup(reply_markup=None)
-        await query.message.reply_text(question_already_closed_message)
         return
 
     answer.skipped = True
@@ -127,15 +152,19 @@ async def handle_group_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     await query.answer()
 
-    _, answer_id, target = query.data.split(":")
-
-    answer = _resolvable_answer(int(answer_id))
+    answer = await _resolve_or_close(query)
     if answer is None:
-        await query.edit_message_reply_markup(reply_markup=None)
-        await query.message.reply_text(question_already_closed_message)
         return
 
-    group = None if target == BACK_ACTION else int(target)
+    target = callbacks.parts(query.data)[1]
+
+    if target == callbacks.BACK:
+        group = None
+    else:
+        indexes = callbacks.indexes(query.data)
+        if indexes is None:
+            return
+        group = indexes[1]
 
     await query.edit_message_reply_markup(
         reply_markup=build_question_keyboard(answer.question, answer, group=group),
@@ -146,16 +175,16 @@ async def handle_option_button(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
 
-    # Two or three trailing parts: an index, or a group and an index.
-    _, answer_id, *path = query.data.split(":")
-
-    answer = _resolvable_answer(int(answer_id))
+    answer = await _resolve_or_close(query)
     if answer is None:
-        await query.edit_message_reply_markup(reply_markup=None)
-        await query.message.reply_text(question_already_closed_message)
         return
 
-    chosen = option_at(answer.question.option_list, [int(part) for part in path])
+    # Two or three parts: the answer, then an index — or a group and an index.
+    path = callbacks.indexes(query.data)
+    if path is None:
+        return
+
+    chosen = option_at(answer.question.option_list, path[1:])
     if chosen is None:
         return
 
@@ -270,10 +299,18 @@ async def handle_ask_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 ask_command_handler = CommandHandler("ask", handle_ask_command)
-answer_button_handler = CallbackQueryHandler(handle_answer_button, pattern="^answer:")
-skip_button_handler = CallbackQueryHandler(handle_skip_button, pattern="^skip:")
-option_button_handler = CallbackQueryHandler(handle_option_button, pattern="^option:")
-group_button_handler = CallbackQueryHandler(handle_group_button, pattern="^group:")
+answer_button_handler = CallbackQueryHandler(
+    handle_answer_button, pattern=callbacks.pattern(callbacks.ANSWER)
+)
+skip_button_handler = CallbackQueryHandler(
+    handle_skip_button, pattern=callbacks.pattern(callbacks.SKIP)
+)
+option_button_handler = CallbackQueryHandler(
+    handle_option_button, pattern=callbacks.pattern(callbacks.OPTION)
+)
+group_button_handler = CallbackQueryHandler(
+    handle_group_button, pattern=callbacks.pattern(callbacks.GROUP)
+)
 
 # Menu buttons arrive as plain text, so they must be excluded or they'd be
 # saved as answers.

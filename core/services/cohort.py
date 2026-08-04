@@ -1,8 +1,8 @@
 """Cohort enrollment: the joining window, capacity, and the waitlist."""
-from bot import clock
-from bot.enums import CohortStatus, EnrollmentState, Status
-from bot.logs import get_logger
-from bot.models import Cohort, User
+from core import clock
+from core.enums import CohortStatus, EnrollmentState, Status
+from core.logs import get_logger
+from core.models import Cohort, User
 
 logger = get_logger(__name__)
 

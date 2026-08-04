@@ -10,11 +10,11 @@ as it is, so re-running never overwrites edits made through the admin panel.
 import json
 from datetime import timedelta
 
-from bot import clock
-from bot.config import QUESTION_ORDER_STEP
-from bot.enums import CohortStatus
-from bot.logs import configure_logging, get_logger
-from bot.models import Cohort, FinalQuestion, Question, initialize_database
+from core import clock
+from core.settings import QUESTION_ORDER_STEP
+from core.enums import CohortStatus
+from core.logs import configure_logging, get_logger
+from core.models import Cohort, FinalQuestion, Question, initialize_database
 from samples.data import (
     CATEGORY_ORDER_CSV,
     DURATION_DAYS,

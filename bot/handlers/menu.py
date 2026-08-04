@@ -11,22 +11,19 @@ from telegram.ext import (
     filters, CallbackQueryHandler,
 )
 
-from bot.config import CONTINUE_ACTION, EDIT_TIME_PREFIX
-from bot.enums import Status
-from bot.logs import get_logger
-from bot.services.cycle import pause_user, resume_user
-from bot.services.questions import close_open_answers
-from bot.services.slots import (
-    build_slots_keyboard,
-    format_slots,
-    save_slots,
-    saved_slots,
-    slot_from_callback,
-    toggle_slot,
-)
-from bot.services.stats import build_stats_text
+from bot import callbacks
+from bot.handlers import slot_picker
+from bot.views import build_stats_text
+from core.enums import Status
+from core.logs import get_logger
+from core.services.cycle import pause_user, resume_user
+from core.services.questions import close_open_answers
+from core.services.slots import format_slots, save_slots, saved_slots
 from bot.texts import *
 from bot.utils import current_user
+
+# What the picker's confirm button does here, as opposed to in onboarding.
+EDIT_TIME_ACTION = callbacks.EDIT_TIME
 
 logger = get_logger(__name__)
 
@@ -108,9 +105,8 @@ async def handle_edit_times(update: Update, context: ContextTypes.DEFAULT_TYPE):
     selected = saved_slots(user)
     context.user_data["edit_time_slots"] = selected
 
-    await update.message.reply_text(
-        slots_prompt_message,
-        reply_markup=build_slots_keyboard(selected, EDIT_TIME_PREFIX, slots_save_button),
+    await slot_picker.show(
+        update.message, selected, EDIT_TIME_ACTION, slots_save_button,
     )
 
 
@@ -118,10 +114,11 @@ async def handle_edit_time_toggle(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
 
-    selected = toggle_slot(context.user_data.setdefault("edit_time_slots", set()), slot_from_callback(query.data))
-
-    await query.edit_message_reply_markup(
-        reply_markup=build_slots_keyboard(selected, EDIT_TIME_PREFIX, slots_save_button),
+    await slot_picker.toggle(
+        query,
+        context.user_data.setdefault("edit_time_slots", set()),
+        EDIT_TIME_ACTION,
+        slots_save_button,
     )
 
 
@@ -154,7 +151,10 @@ async def handle_pause(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if user.is_paused:
-        keyboard = [[InlineKeyboardButton(menu_resume_button, callback_data="pause:resume")]]
+        keyboard = [[InlineKeyboardButton(
+            menu_resume_button,
+            callback_data=callbacks.encode(callbacks.PAUSE, callbacks.RESUME),
+        )]]
         await update.message.reply_text(
             menu_already_paused_template.format(days_left=user.pause_days_left),
             reply_markup=InlineKeyboardMarkup(keyboard),
@@ -163,8 +163,14 @@ async def handle_pause(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [
-            InlineKeyboardButton(menu_pause_confirm_yes_button, callback_data="pause:yes"),
-            InlineKeyboardButton(menu_pause_confirm_no_button, callback_data="pause:no"),
+            InlineKeyboardButton(
+                menu_pause_confirm_yes_button,
+                callback_data=callbacks.encode(callbacks.PAUSE, callbacks.YES),
+            ),
+            InlineKeyboardButton(
+                menu_pause_confirm_no_button,
+                callback_data=callbacks.encode(callbacks.PAUSE, callbacks.NO),
+            ),
         ]
     ]
 
@@ -183,11 +189,13 @@ async def handle_pause_confirm(update: Update, context: ContextTypes.DEFAULT_TYP
     if user is None or user.intention_type is None:
         return
 
-    if query.data == "pause:no":
+    choice = callbacks.payload(query.data)
+
+    if choice == callbacks.NO:
         await query.message.reply_text(menu_pause_cancelled_message)
         return
 
-    if query.data == "pause:resume":
+    if choice == callbacks.RESUME:
         resume_user(user)
         await query.message.reply_text(menu_resumed_message)
         return
@@ -205,8 +213,14 @@ async def handle_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [
-            InlineKeyboardButton(menu_finish_confirm_yes_button, callback_data="finish:yes"),
-            InlineKeyboardButton(menu_finish_confirm_no_button, callback_data="finish:no"),
+            InlineKeyboardButton(
+                menu_finish_confirm_yes_button,
+                callback_data=callbacks.encode(callbacks.FINISH, callbacks.YES),
+            ),
+            InlineKeyboardButton(
+                menu_finish_confirm_no_button,
+                callback_data=callbacks.encode(callbacks.FINISH, callbacks.NO),
+            ),
         ]
     ]
 
@@ -221,7 +235,7 @@ async def handle_finish_confirm(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
     await query.edit_message_reply_markup(reply_markup=None)
 
-    if query.data == "finish:no":
+    if callbacks.payload(query.data) == callbacks.NO:
         await query.message.reply_text(menu_finish_cancelled_message)
         return
 
@@ -248,14 +262,19 @@ contacts_handler = MessageHandler(filters.Text([menu_contacts_button]), handle_c
 stats_handler = MessageHandler(filters.Text([menu_stats_button]), handle_stats)
 edit_times_handler = MessageHandler(filters.Text([menu_edit_times_button]), handle_edit_times)
 pause_handler = MessageHandler(filters.Text([menu_pause_button]), handle_pause)
-pause_confirm_handler = CallbackQueryHandler(handle_pause_confirm, pattern="^pause:")
+pause_confirm_handler = CallbackQueryHandler(
+    handle_pause_confirm, pattern=callbacks.pattern(callbacks.PAUSE)
+)
 finish_handler = MessageHandler(filters.Text([menu_finish_button]), handle_finish)
 
+# Save must be matched before the toggle pattern, which is a prefix of it.
 edit_time_save_handler = CallbackQueryHandler(
-    handle_edit_time_save, pattern=f"^{EDIT_TIME_PREFIX}:{CONTINUE_ACTION}$"
+    handle_edit_time_save, pattern=callbacks.exact(EDIT_TIME_ACTION, callbacks.CONTINUE)
 )
 edit_time_toggle_handler = CallbackQueryHandler(
-    handle_edit_time_toggle, pattern=f"^{EDIT_TIME_PREFIX}:"
+    handle_edit_time_toggle, pattern=callbacks.pattern(EDIT_TIME_ACTION)
 )
 
-finish_confirm_handler = CallbackQueryHandler(handle_finish_confirm, pattern="^finish:")
+finish_confirm_handler = CallbackQueryHandler(
+    handle_finish_confirm, pattern=callbacks.pattern(callbacks.FINISH)
+)

@@ -17,6 +17,14 @@ class Status(IntEnum):
 
 
 class IntentionCategory(IntEnum):
+    """The nine ways a participant's «Я хочу» can begin.
+
+    A member's *value* is what `User.intention_type` stores and what the
+    onboarding keyboard sends back, so reordering these reassigns the category
+    of every participant already in the database. The wording lives in
+    `bot/texts.py::category_labels`, in this order — `test_texts.py` checks the
+    two have not drifted apart.
+    """
     START = 0
     FINISH = 1
     LEARN = 2
@@ -39,6 +47,15 @@ class QuestionType(IntEnum):
 
 
 class CohortStatus(IntEnum):
+    """Where a cohort is in its life.
+
+    Only ENDED changes what the bot does — it is what closes enrollment for
+    good, via `enrollment_state`. The other three are labels the admin sets and
+    reads; whether a cohort is taking people is decided by its dates, its
+    capacity and `is_active`, not by this. Kept as-is because the values are
+    already stored in the database.
+    """
+
     PLANNED = 0
     ENROLLING = 1
     RUNNING = 2

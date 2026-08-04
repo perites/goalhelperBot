@@ -11,22 +11,21 @@ from datetime import timedelta
 
 from telegram.ext import ContextTypes
 
-from bot import clock
-from bot.config import SWEEP_HOUR, TICK_INTERVAL_HOURS
-from bot.errors import CohortMissing
-from bot.logs import get_logger
-from bot.models import User, UserTime
-from bot.services.cohort import (
+from core import clock
+from bot.settings import SWEEP_HOUR, TICK_INTERVAL_HOURS
+from core.errors import CohortMissing
+from core.logs import get_logger
+from core.models import User, UserTime
+from core.services.cohort import (
     active_participants, cohort_is_complete, current_cohort, end_cohort,
 )
-from bot.services.cycle import (
-    complete_cycle,
-    resume_user,
-    users_due_for_completion,
-    users_with_expired_pause,
+from bot.closing import complete_cycle
+from bot.delivery import deliver_question
+from core.services.cycle import (
+    resume_user, users_due_for_completion, users_with_expired_pause,
 )
-from bot.services.questions import deliver_question, sent_in_slot_today
-from bot.services.slots import slot_id
+from core.services.questions import sent_in_slot_today
+from core.services.slots import slot_id
 
 logger = get_logger(__name__)
 

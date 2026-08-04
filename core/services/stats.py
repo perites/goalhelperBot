@@ -1,16 +1,19 @@
-"""Per-user statistics, shared by the menu and the end-of-cycle summary.
+"""Per-user counts, shared by the bot's statistics screen, the end-of-cycle
+summary, and the admin panel.
 
 Follow-up answers are excluded throughout. A question and its follow-up are
 one reflective unit, so counting both would inflate "Відповідей"; and an
 intensity follow-up carries its parent's question type, so without the filter
 its values ("7") would rank alongside real emotions in "найчастіші емоції".
+
+Numbers only — the sentence they get written into is the bot's, and lives in
+`bot/views.py`.
 """
 from collections import Counter
 
-from bot.config import TOP_EMOTIONS_SHOWN
-from bot.enums import QuestionType
-from bot.models import Question, Answer
-from bot.texts import menu_stats_template, menu_stats_no_emotions
+from core.enums import QuestionType
+from core.models import Answer, Question
+from core.settings import TOP_EMOTIONS_SHOWN
 
 
 def answered_count(user, question_type=None):
@@ -59,13 +62,18 @@ def top_emotions(user):
     return ", ".join(emotion for emotion, _ in ranked)
 
 
-def build_stats_text(user):
-    return menu_stats_template.format(
-        day=user.cycle_day,
-        answered=answered_count(user),
-        skipped=skipped_count(user),
-        emotions=top_emotions(user) or menu_stats_no_emotions,
-        steps=answered_count(user, QuestionType.STEP),
-        wins=answered_count(user, QuestionType.WIN),
-        gratitude=answered_count(user, QuestionType.GRATITUDE),
-    )
+def stats_for(user):
+    """Every number both front ends show about a participant, in one place.
+
+    `emotions` comes back as it is — possibly empty. What to print instead is a
+    matter of tone and belongs to whoever is printing it: the bot says «поки що
+    немає», the panel says «—».
+    """
+    return {
+        "answered": answered_count(user),
+        "skipped": skipped_count(user),
+        "emotions": top_emotions(user),
+        "steps": answered_count(user, QuestionType.STEP),
+        "wins": answered_count(user, QuestionType.WIN),
+        "gratitude": answered_count(user, QuestionType.GRATITUDE),
+    }

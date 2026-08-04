@@ -2,11 +2,12 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CommandHandler, ContextTypes
 
-from bot.enums import EnrollmentState, Status
+from bot import callbacks
 from bot.handlers.menu import main_menu_keyboard
-from bot.logs import get_logger
-from bot.models import User
-from bot.services.cohort import enrollment_state, put_on_waitlist
+from core.enums import EnrollmentState, Status
+from core.logs import get_logger
+from core.models import User
+from core.services.cohort import enrollment_state, put_on_waitlist
 from bot.texts import (
     cohort_already_stopped_message,
     cohort_finished_message,
@@ -59,7 +60,10 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info("/start from new user=%s; enrollment open", user.telegram_id)
 
-    keyboard = [[InlineKeyboardButton(start_message_button, callback_data="start:onboarding")]]
+    keyboard = [[InlineKeyboardButton(
+        start_message_button,
+        callback_data=callbacks.encode(callbacks.START_ONBOARDING, callbacks.ONBOARDING),
+    )]]
 
     await update.message.reply_text(start_message, reply_markup=InlineKeyboardMarkup(keyboard))
 

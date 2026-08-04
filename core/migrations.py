@@ -39,7 +39,7 @@ renamed out from under them.
 
 Nothing here imports models.py, so models.py can import this.
 """
-from bot.logs import get_logger
+from core.logs import get_logger
 
 logger = get_logger(__name__)
 

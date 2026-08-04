@@ -6,11 +6,11 @@ from peewee import (
     BooleanField, SQL, DateField, DateTimeField, ForeignKeyField, TimeField,
 )
 
-from bot import clock
-from bot.config import DATABASE_NAME, PAUSE_DURATION_DAYS
-from bot.enums import CohortStatus, QuestionType
-from bot.errors import CohortMissing
-from bot.migrations import apply_migrations, latest_version, stamp
+from core import clock
+from core.settings import DATABASE_NAME, PAUSE_DURATION_DAYS
+from core.enums import CohortStatus, QuestionType
+from core.errors import CohortMissing
+from core.migrations import apply_migrations, latest_version, stamp
 
 # Three processes share this file: the bot holds a connection for as long as it
 # runs, the panel opens one per request, and sqlite-web browses it.

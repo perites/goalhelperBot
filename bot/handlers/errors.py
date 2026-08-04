@@ -6,7 +6,7 @@ dumps the Update, whose repr contains the user's message text.
 """
 from telegram import Update
 
-from bot.logs import get_logger
+from core.logs import get_logger
 
 logger = get_logger(__name__)
 

@@ -1,20 +1,14 @@
 """A participant's personal 30 days: pausing, and reaching the end.
 
-Splitting this from cohort.py lets it depend on the questions service without
-a cycle, which is what the function-level imports used to work around.
+State transitions only. Sending the closing block and the summary that follows
+it is the bot's — see `bot/closing.py`.
 """
-from bot import clock
-from bot.enums import Status
-from bot.logs import get_logger
-from bot.models import User
-from bot.services.cohort import active_participants
-from bot.services.questions import (
-    close_open_answers,
-    has_received_closing_block,
-    send_closing_block,
-)
-from bot.services.stats import build_stats_text
-from bot.texts import cycle_final_invite_message, cycle_final_summary_intro
+from core import clock
+from core.enums import Status
+from core.logs import get_logger
+from core.models import User
+from core.services.cohort import active_participants
+from core.services.questions import close_open_answers, has_received_closing_block
 
 logger = get_logger(__name__)
 
@@ -84,42 +78,3 @@ def users_due_for_completion():
         user for user in candidates
         if user.is_cycle_complete and not has_received_closing_block(user)
     ]
-
-
-async def complete_cycle(bot, user):
-    """Last day done: send the closing block, then mark finished.
-
-    The send comes first because FINISHED is exactly what takes someone out of
-    `users_due_for_completion`. Flipping the status before a send that then
-    failed would retire them silently — no closing questions, no summary, no
-    invitation, and nothing left that would ever try again. Failing here
-    leaves them ACTIVE, so tomorrow's sweep has another go.
-
-    Nothing reaches them in the gap: `is_cycle_complete` already keeps the
-    daily questions away, so the status flip is for the sweep's benefit rather
-    than the participant's.
-
-    An empty closing bank is not a failure — `send_closing_block` says so in
-    the log and returns None, and the participant is still finished.
-    """
-    if has_received_closing_block(user):
-        return None
-
-    final_answer = await send_closing_block(bot, user)
-
-    finish_user(user)
-    logger.info("user=%s reached day %s and finished", user.telegram_id, user.cycle_day)
-
-    return final_answer
-
-
-async def send_closing_summary(bot, user):
-    """Called once the closing block is answered: summary, then thanks and
-    the invitation to book a session (ТЗ §15–16)."""
-    await bot.send_message(
-        chat_id=user.telegram_id,
-        text=cycle_final_summary_intro.format(total=user.cycle_length),
-    )
-
-    await bot.send_message(chat_id=user.telegram_id, text=build_stats_text(user))
-    await bot.send_message(chat_id=user.telegram_id, text=cycle_final_invite_message)

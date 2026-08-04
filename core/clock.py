@@ -8,7 +8,7 @@ timestamp naive avoids mixing aware and naive values in comparisons.
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from bot.config import TIMEZONE
+from core.settings import TIMEZONE
 
 KYIV_TZ = ZoneInfo(TIMEZONE)
 

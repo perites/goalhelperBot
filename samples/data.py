@@ -6,7 +6,7 @@ editing here and re-seeding an empty database, or through the admin panel.
 
 Nothing in `bot/` or `admin/` imports this module.
 """
-from bot.enums import QuestionType
+from core.enums import QuestionType
 
 # --- The demo cohort -------------------------------------------------------
 #

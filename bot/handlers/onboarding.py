@@ -8,21 +8,16 @@ from telegram.ext import (
     filters, CallbackQueryHandler,
 )
 
-from bot import clock
-from bot.config import CONTINUE_ACTION, TIME_SLOT_PREFIX
-from bot.enums import Status
+from bot import callbacks
+from bot.delivery import deliver_question
+from bot.handlers import slot_picker
 from bot.handlers.menu import main_menu_keyboard
-from bot.logs import describe, get_logger
-from bot.models import User
-from bot.services.cohort import join_cohort, put_on_waitlist
-from bot.services.questions import deliver_question
-from bot.services.slots import (
-    build_slots_keyboard,
-    format_slots,
-    save_slots,
-    slot_from_callback,
-    toggle_slot,
-)
+from core import clock
+from core.enums import IntentionCategory, Status
+from core.logs import describe, get_logger
+from core.models import User
+from core.services.cohort import join_cohort, put_on_waitlist
+from core.services.slots import format_slots, save_slots
 from bot.texts import *
 from bot.utils import current_user, get_message
 
@@ -44,8 +39,14 @@ async def ask_consent(update: Update):
     message = get_message(update)
     keyboard = [
         [
-            InlineKeyboardButton(consent_yes_button, callback_data="consent:yes"),
-            InlineKeyboardButton(consent_no_button, callback_data="consent:no"),
+            InlineKeyboardButton(
+                consent_yes_button,
+                callback_data=callbacks.encode(callbacks.CONSENT, callbacks.YES),
+            ),
+            InlineKeyboardButton(
+                consent_no_button,
+                callback_data=callbacks.encode(callbacks.CONSENT, callbacks.NO),
+            ),
         ]
     ]
 
@@ -58,7 +59,7 @@ async def handle_consent(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == "consent:no":
+    if callbacks.payload(query.data) == callbacks.NO:
         User.update(consent=False, status=Status.DECLINED).where(
             User.telegram_id == update.effective_user.id
         ).execute()
@@ -85,7 +86,9 @@ async def handle_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ask_category(update: Update):
     message = get_message(update)
     keyboard = [
-        [InlineKeyboardButton(label, callback_data=f"category:{index}")]
+        [InlineKeyboardButton(
+            label, callback_data=callbacks.encode(callbacks.CATEGORY, index),
+        )]
         for index, label in enumerate(category_labels)
     ]
 
@@ -97,7 +100,15 @@ async def ask_category(update: Update):
 async def handle_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    intention_type = int(query.data.split(":")[1])
+    chosen = callbacks.indexes(query.data)
+
+    # The keyboard only ever offers the nine, but the data comes back from the
+    # client — and this index is stored on the participant and later used to
+    # look a label up by position.
+    if chosen is None or chosen[0] not in set(IntentionCategory):
+        return CATEGORY
+
+    intention_type = chosen[0]
     context.user_data["intention_type"] = intention_type
     return await ask_intention(update, intention_type)
 
@@ -115,12 +126,10 @@ async def handle_intention(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def ask_time_slots(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = get_message(update)
     selected = context.user_data.setdefault("time_slots", set())
 
-    await message.reply_text(
-        slots_prompt_message,
-        reply_markup=build_slots_keyboard(selected, TIME_SLOT_PREFIX, slots_continue_button),
+    await slot_picker.show(
+        get_message(update), selected, callbacks.TIME_SLOT, slots_continue_button,
     )
 
     return TIME_SLOTS
@@ -130,10 +139,11 @@ async def handle_time_slot_toggle(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
 
-    selected = toggle_slot(context.user_data.setdefault("time_slots", set()), slot_from_callback(query.data))
-
-    await query.edit_message_reply_markup(
-        reply_markup=build_slots_keyboard(selected, TIME_SLOT_PREFIX, slots_continue_button),
+    await slot_picker.toggle(
+        query,
+        context.user_data.setdefault("time_slots", set()),
+        callbacks.TIME_SLOT,
+        slots_continue_button,
     )
 
     return TIME_SLOTS
@@ -162,8 +172,14 @@ async def ask_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     keyboard = [
         [
-            InlineKeyboardButton(onboarding_confirm_yes_button, callback_data="confirm:yes"),
-            InlineKeyboardButton(onboarding_confirm_restart_button, callback_data="confirm:restart"),
+            InlineKeyboardButton(
+                onboarding_confirm_yes_button,
+                callback_data=callbacks.encode(callbacks.CONFIRM, callbacks.YES),
+            ),
+            InlineKeyboardButton(
+                onboarding_confirm_restart_button,
+                callback_data=callbacks.encode(callbacks.CONFIRM, callbacks.RESTART),
+            ),
         ]
     ]
 
@@ -176,7 +192,7 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == "confirm:restart":
+    if callbacks.payload(query.data) == callbacks.RESTART:
         context.user_data.clear()
         return await ask_consent(update)
 
@@ -217,7 +233,10 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ask_ready(update: Update):
     message = get_message(update)
-    keyboard = [[InlineKeyboardButton(onboarding_ready_button, callback_data="ready:yes")]]
+    keyboard = [[InlineKeyboardButton(
+        onboarding_ready_button,
+        callback_data=callbacks.encode(callbacks.READY, callbacks.YES),
+    )]]
 
     await message.reply_text(onboarding_ready_message, reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -249,28 +268,53 @@ async def handle_ready(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Cancelled.")
+    """/cancel — leaves onboarding without finishing it.
+
+    The reply used to be the English "Cancelled.", which any participant could
+    reach by typing the command.
+    """
+    await update.message.reply_text(onboarding_cancelled_message)
+
     return ConversationHandler.END
 
 
 onboarding_conv_handler = ConversationHandler(
     entry_points=[
-        CallbackQueryHandler(begin_onboarding, pattern="^start:onboarding$")
+        CallbackQueryHandler(
+            begin_onboarding,
+            pattern=callbacks.exact(callbacks.START_ONBOARDING, callbacks.ONBOARDING),
+        )
     ],
     states={
-        CONSENT: [CallbackQueryHandler(handle_consent, pattern="^consent:")],
+        CONSENT: [CallbackQueryHandler(
+            handle_consent, pattern=callbacks.pattern(callbacks.CONSENT)
+        )],
         # Menu buttons are plain text, and a reply keyboard can still be on
         # screen from an earlier run — excluding them stops "📊 Моя
         # статистика" being saved as somebody's name.
         NAME: [MessageHandler(FREE_TEXT, handle_name)],
-        CATEGORY: [CallbackQueryHandler(handle_category, pattern="^category:")],
+        CATEGORY: [CallbackQueryHandler(
+            handle_category, pattern=callbacks.pattern(callbacks.CATEGORY)
+        )],
         INTENTION: [MessageHandler(FREE_TEXT, handle_intention)],
         TIME_SLOTS: [
-            CallbackQueryHandler(handle_time_slots_continue, pattern=f"^{TIME_SLOT_PREFIX}:{CONTINUE_ACTION}$"),
-            CallbackQueryHandler(handle_time_slot_toggle, pattern=f"^{TIME_SLOT_PREFIX}:"),
+            # Continue must be matched before the toggle pattern, which is a
+            # prefix of it.
+            CallbackQueryHandler(
+                handle_time_slots_continue,
+                pattern=callbacks.exact(callbacks.TIME_SLOT, callbacks.CONTINUE),
+            ),
+            CallbackQueryHandler(
+                handle_time_slot_toggle,
+                pattern=callbacks.pattern(callbacks.TIME_SLOT),
+            ),
         ],
-        CONFIRM: [CallbackQueryHandler(handle_confirm, pattern="^confirm:")],
-        READY: [CallbackQueryHandler(handle_ready, pattern="^ready:yes$")],
+        CONFIRM: [CallbackQueryHandler(
+            handle_confirm, pattern=callbacks.pattern(callbacks.CONFIRM)
+        )],
+        READY: [CallbackQueryHandler(
+            handle_ready, pattern=callbacks.exact(callbacks.READY, callbacks.YES)
+        )],
     },
     fallbacks=[CommandHandler("cancel", cancel)],
 

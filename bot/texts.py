@@ -1,4 +1,4 @@
-from bot.config import KSENIA_TELEGRAM
+from bot.settings import KSENIA_TELEGRAM
 
 start_message = '''
 Привіт. Я — “Я хочу бот”.
@@ -78,6 +78,12 @@ onboarding_confirmed_message = '''
 Домовились.
 Твій 30-денний цикл починається.
 Я буду повертати тебе до твого наміру, ставити питання й допомагати помічати маленькі кроки.
+'''
+
+onboarding_cancelled_message = '''
+Добре, зупиняємось тут.
+
+Коли будеш готова / готовий — напиши /start, і почнемо спочатку.
 '''
 
 onboarding_ready_message = '''

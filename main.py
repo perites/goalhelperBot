@@ -8,8 +8,8 @@ load_dotenv()
 
 from telegram.ext import Application, PicklePersistence
 
-from bot.config import DATA_DIR, admin_chat_ids
-from bot.logs import alert_handler, configure_logging, get_logger
+from core.settings import DATA_DIR, admin_chat_ids
+from core.logs import alert_handler, configure_logging, get_logger
 
 from bot.handlers.answers import (
     answer_button_handler,
@@ -34,8 +34,8 @@ from bot.handlers.menu import (
 )
 from bot.handlers.onboarding import onboarding_conv_handler
 from bot.handlers.start import start_handler
-from bot.models import initialize_database
-from bot.services.scheduler import schedule
+from core.models import initialize_database
+from bot.scheduler import schedule
 
 logger = get_logger(__name__)
 

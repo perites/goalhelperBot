@@ -13,7 +13,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from bot.config import (
+from core.settings import (
     ALERT_DEDUPE_WINDOW_SECONDS,
     ALERT_LEVEL,
     ALERT_MAX_PER_MINUTE,
@@ -26,7 +26,10 @@ from bot.config import (
     admin_chat_ids,
 )
 
-ROOT_LOGGER_NAME = "bot"
+# Everything the project logs hangs off this one logger, which is where the
+# handlers are attached. Named for the project rather than the bot: the admin
+# panel logs through it too.
+ROOT_LOGGER_NAME = "goalbot"
 
 # Telegram caps messages at 4096 characters.
 MAX_ALERT_LENGTH = 3500
@@ -38,10 +41,12 @@ MAX_PENDING_ALERTS = 50
 
 
 def get_logger(name):
-    """Logger for a module, namespaced under the bot root."""
-    suffix = name.removeprefix("bot.") if name.startswith("bot.") else name
+    """Logger for a module, namespaced under the project root.
 
-    return logging.getLogger(f"{ROOT_LOGGER_NAME}.{suffix}")
+    Pass `__name__` and the log line says which package it came from —
+    `goalbot.core.services.cohort`, `goalbot.bot.delivery`, `goalbot.admin.app`.
+    """
+    return logging.getLogger(f"{ROOT_LOGGER_NAME}.{name}")
 
 
 def describe(text):

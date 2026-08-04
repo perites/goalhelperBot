@@ -12,9 +12,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from admin.app import create_app
-from bot.config import ADMIN_LOG_FILE_NAME
-from bot.logs import configure_logging, get_logger
-from bot.models import initialize_database
+from core.settings import ADMIN_LOG_FILE_NAME
+from core.logs import configure_logging, get_logger
+from core.models import initialize_database
 
 ADMIN_HOST = "127.0.0.1"
 ADMIN_PORT = int(os.getenv("ADMIN_PANEL_PORT", "8082"))
