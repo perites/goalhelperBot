@@ -166,8 +166,19 @@ class TelegramAlertHandler(logging.Handler):
 alert_handler = TelegramAlertHandler(level=getattr(logging, ALERT_LEVEL))
 
 
-def configure_logging():
-    """Wire up file, console, and alert handlers. Safe to call twice."""
+def configure_logging(file_name=LOG_FILE_NAME, alerts=True):
+    """Wire up file, console, and alert handlers. Safe to call twice.
+
+    Both arguments exist for the admin panel, which is a separate process:
+
+    `file_name` — the two must not write the same file. A
+    TimedRotatingFileHandler renames the file it owns at midnight, so two
+    processes doing that to one path lose each other's records.
+
+    `alerts` — the Telegram alert handler needs the bot's event loop to send
+    anything, and only the bot process has one. Leaving it attached would be
+    harmless but misleading.
+    """
     root = logging.getLogger(ROOT_LOGGER_NAME)
 
     if root.handlers:
@@ -182,7 +193,7 @@ def configure_logging():
     log_dir.mkdir(parents=True, exist_ok=True)
 
     file_handler = logging.handlers.TimedRotatingFileHandler(
-        log_dir / LOG_FILE_NAME,
+        log_dir / file_name,
         when="midnight",
         backupCount=LOG_RETENTION_DAYS,
         encoding="utf-8",
@@ -192,11 +203,12 @@ def configure_logging():
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(formatter)
 
-    alert_handler.setFormatter(formatter)
-
     root.addHandler(file_handler)
     root.addHandler(console)
-    root.addHandler(alert_handler)
+
+    if alerts:
+        alert_handler.setFormatter(formatter)
+        root.addHandler(alert_handler)
 
     # httpx logs every Telegram API call at INFO, which drowns everything else.
     logging.getLogger("httpx").setLevel(logging.WARNING)

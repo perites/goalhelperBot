@@ -11,7 +11,13 @@
 </div>
 
 <div class="toolbar">
+  {# Both selects share one form, so changing either keeps the other's choice. #}
   <form method="get">
+    <select name="file" onchange="this.form.submit()">
+      {% for name in files %}
+        <option value="{{ name }}" {{ 'selected' if file == name }}>{{ name }}</option>
+      {% endfor %}
+    </select>
     <select name="level" onchange="this.form.submit()">
       <option value="" {{ 'selected' if not level }}>усі рівні</option>
       {% for name in ['INFO', 'WARNING', 'ERROR', 'CRITICAL'] %}
@@ -56,6 +62,7 @@
   const live  = document.getElementById('live');
   const state = document.getElementById('tail-state');
   const LEVEL = {{ level | tojson }};
+  const FILE  = {{ file | tojson }};
   const PATH  = {{ path | string | tojson }};
 
   let offset = {{ offset | tojson }};
@@ -83,6 +90,7 @@
 
     try {
       const url = '{{ url_for("logs_tail") }}?offset=' + offset +
+                  '&file=' + encodeURIComponent(FILE) +
                   (LEVEL ? '&level=' + encodeURIComponent(LEVEL) : '');
       const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
       if (!response.ok) throw new Error(response.status);

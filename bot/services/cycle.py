@@ -87,18 +87,30 @@ def users_due_for_completion():
 
 
 async def complete_cycle(bot, user):
-    """Last day done: mark finished and send the closing block.
+    """Last day done: send the closing block, then mark finished.
 
-    Status flips to FINISHED straight away so the scheduler stops sending
-    daily questions while we wait for the closing answer.
+    The send comes first because FINISHED is exactly what takes someone out of
+    `users_due_for_completion`. Flipping the status before a send that then
+    failed would retire them silently — no closing questions, no summary, no
+    invitation, and nothing left that would ever try again. Failing here
+    leaves them ACTIVE, so tomorrow's sweep has another go.
+
+    Nothing reaches them in the gap: `is_cycle_complete` already keeps the
+    daily questions away, so the status flip is for the sweep's benefit rather
+    than the participant's.
+
+    An empty closing bank is not a failure — `send_closing_block` says so in
+    the log and returns None, and the participant is still finished.
     """
     if has_received_closing_block(user):
         return None
 
+    final_answer = await send_closing_block(bot, user)
+
     finish_user(user)
     logger.info("user=%s reached day %s and finished", user.telegram_id, user.cycle_day)
 
-    return await send_closing_block(bot, user)
+    return final_answer
 
 
 async def send_closing_summary(bot, user):

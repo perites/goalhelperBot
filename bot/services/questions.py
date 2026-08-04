@@ -7,6 +7,7 @@ import random
 from datetime import datetime, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import TelegramError
 
 from bot import clock
 from bot.config import (
@@ -282,6 +283,36 @@ def render_question(answer):
     )
 
 
+async def _send_for_row(bot, row, chat_id, text, reply_markup=None):
+    """Send the message a just-created row stands for, and undo the row if it
+    doesn't arrive.
+
+    The row has to exist before the send: the keyboard's callback data is built
+    from its id. But a row is also the only thing that says a question is
+    waiting for an answer — so one left behind by a failed send is worse than
+    no row at all. It would make the slot look already started, and the next
+    thing the participant typed about anything else would be filed as the
+    answer to a question they never saw.
+
+    Telegram refuses sends for ordinary reasons — the participant blocked the
+    bot, deleted their account, or we're being rate limited — so this is a
+    normal path, not a corruption case. The caller sees the original error.
+    """
+    try:
+        message = await bot.send_message(
+            chat_id=chat_id, text=text, reply_markup=reply_markup,
+        )
+    except Exception:
+        row.delete_instance()
+        raise
+
+    if message is not None:
+        row.message_id = message.message_id
+        row.save()
+
+    return message
+
+
 async def send_question(bot, user, slot=None, rng=None):
     """Close out the previous question, then send the next one."""
     close_open_answers(user)
@@ -299,15 +330,12 @@ async def send_question(bot, user, slot=None, rng=None):
         category_index=category_index,
     )
 
-    message = await bot.send_message(
+    await _send_for_row(
+        bot, answer,
         chat_id=user.telegram_id,
         text=render_question(answer),
         reply_markup=build_question_keyboard(question, answer),
     )
-
-    if message is not None:
-        answer.message_id = message.message_id
-        answer.save()
 
     logger.debug(
         "Question sent: user=%s answer=%s question=%s day=%s",
@@ -406,15 +434,12 @@ async def send_follow_up(bot, user, parent_answer):
         parent=parent_answer,
     )
 
-    message = await bot.send_message(
+    await _send_for_row(
+        bot, answer,
         chat_id=user.telegram_id,
         text=render_question(answer),
         reply_markup=build_question_keyboard(question, answer),
     )
-
-    if message is not None:
-        answer.message_id = message.message_id
-        answer.save()
 
     logger.info(
         "Sent follow-up to user=%s question=%s (after answer=%s)",
@@ -472,11 +497,23 @@ async def show_resolved_answer(bot, answer):
         else question_answered_suffix.format(answer=answer.answer)
     )
 
-    await bot.edit_message_text(
-        chat_id=answer.user.telegram_id,
-        message_id=answer.message_id,
-        text=body,
-    )
+    # Tidying the chat history is the least important thing happening here. The
+    # answer is already saved, and a follow-up or the closing block may still
+    # be due — so a message that can't be rewritten (deleted, chat cleared,
+    # text unchanged) must not take those down with it. INFO, not WARNING:
+    # this is an ordinary thing for a participant to cause, and WARNING would
+    # put it on Ксенія's phone.
+    try:
+        await bot.edit_message_text(
+            chat_id=answer.user.telegram_id,
+            message_id=answer.message_id,
+            text=body,
+        )
+    except TelegramError:
+        logger.info(
+            "Could not rewrite the question message for answer=%s; the answer "
+            "itself is saved", answer.id, exc_info=True,
+        )
 
 
 # --- Closing block ---------------------------------------------------------
@@ -512,11 +549,10 @@ async def send_closing_block(bot, user):
         user=user, sent_at=clock.now_kyiv(), message_text=body,
     )
 
-    message = await bot.send_message(chat_id=user.telegram_id, text=body)
-
-    if message is not None:
-        final_answer.message_id = message.message_id
-        final_answer.save()
+    # The row is what `has_received_closing_block` reads, and the daily sweep
+    # uses that to decide who still needs one — so a row surviving a failed
+    # send would retire the participant without ever asking them anything.
+    await _send_for_row(bot, final_answer, chat_id=user.telegram_id, text=body)
 
     logger.info("Closing block sent to user=%s (%s questions)", user.telegram_id, len(questions))
 
@@ -529,10 +565,17 @@ async def show_resolved_final_answer(bot, final_answer):
     if final_answer.message_id is None or final_answer.message_text is None:
         return
 
-    await bot.edit_message_text(
-        chat_id=final_answer.user.telegram_id,
-        message_id=final_answer.message_id,
-        text=final_answer.message_text + question_answered_suffix.format(
-            answer=final_answer.answer
-        ),
-    )
+    # Cosmetic, and the summary that follows is not — see show_resolved_answer.
+    try:
+        await bot.edit_message_text(
+            chat_id=final_answer.user.telegram_id,
+            message_id=final_answer.message_id,
+            text=final_answer.message_text + question_answered_suffix.format(
+                answer=final_answer.answer
+            ),
+        )
+    except TelegramError:
+        logger.info(
+            "Could not rewrite the closing block for user=%s; the answer itself "
+            "is saved", final_answer.user_id, exc_info=True,
+        )

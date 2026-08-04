@@ -11,7 +11,12 @@
   <tr><th>Намір</th><td>{{ user.intention or '—' }}</td></tr>
   <tr><th>Час повідомлень</th><td>{{ slots }}</td></tr>
   <tr><th>Старт</th><td>{{ user.date_started or '—' }}</td></tr>
-  <tr><th>День циклу</th><td>{{ user.cycle_day }} із {{ user.cycle_length }}</td></tr>
+  {# Cycle length comes from the cohort, and someone on the waitlist is in
+     none — asking for it raises rather than inventing a number. Their page
+     still has to open: it is where you go to see who is waiting. #}
+  <tr><th>День циклу</th>
+      <td>{% if user.cohort %}{{ user.cycle_day }} із {{ user.cycle_length }}
+          {% else %}<span class="muted">—</span>{% endif %}</td></tr>
   <tr><th>Пауз (днів)</th><td>{{ user.paused_days }}</td></tr>
 </table>
 

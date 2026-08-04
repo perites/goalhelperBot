@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 
 from bot import clock
-from bot.config import BACK_ACTION
+from bot.config import BACK_ACTION, admin_chat_ids
 from bot.enums import Status
 from bot.logs import describe, get_logger
 from bot.models import Answer, User
@@ -218,7 +218,22 @@ async def handle_answer_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def handle_ask_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Manual trigger for testing: /ask <telegram_id>"""
+    """Manual trigger for testing: /ask <telegram_id>
+
+    Admins only. It sends to *another* participant, which closes whatever they
+    had open and consumes a rotation slot — and its replies say whether an id
+    belongs to a participant and what state they are in. Neither is anyone
+    else's to know.
+
+    Unauthorised use is answered with silence rather than a refusal: there is
+    nothing to gain by confirming the command exists. It is logged at INFO
+    rather than WARNING deliberately — WARNING reaches the admin chats, so any
+    stranger could otherwise use this to buzz Ксенія's phone at will.
+    """
+    if update.effective_user.id not in admin_chat_ids():
+        logger.info("Ignoring /ask from non-admin user=%s", update.effective_user.id)
+        return
+
     if not context.args:
         await update.message.reply_text("Usage: /ask <telegram_id>")
         return

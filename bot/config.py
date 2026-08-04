@@ -76,6 +76,12 @@ KSENIA_TELEGRAM = "@kryskaks"
 LOG_DIR = os.path.join(DATA_DIR, "logs")
 LOG_FILE_NAME = "bot.log"
 
+# The panel runs as its own process and must not write the bot's file: a
+# TimedRotatingFileHandler renames the file it owns at midnight, and two
+# processes doing that to one path lose records. Both files live in LOG_DIR and
+# both are listed on the panel's logs page.
+ADMIN_LOG_FILE_NAME = "admin.log"
+
 # Everything at this level and above reaches the file and the console.
 LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s %(levelname)-8s %(name)s | %(message)s"
