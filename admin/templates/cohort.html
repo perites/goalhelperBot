@@ -9,6 +9,7 @@
 </div>
 
 <form method="post" id="cohort-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="category_order" id="category-order" value="{{ order | join(',') }}">
 
   <div class="split">

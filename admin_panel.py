@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from waitress import serve
+
 from admin.app import create_app
 from core.settings import ADMIN_LOG_FILE_NAME
 from core.logs import configure_logging, get_logger
@@ -18,6 +20,11 @@ from core.models import initialize_database
 
 ADMIN_HOST = "127.0.0.1"
 ADMIN_PORT = int(os.getenv("ADMIN_PANEL_PORT", "8082"))
+
+# Enough for one person clicking around, and the number of peewee connections
+# this process will hold: each request opens one and closes it on teardown, and
+# they are thread-local.
+ADMIN_THREADS = 4
 
 logger = get_logger("admin")
 
@@ -52,7 +59,11 @@ def main():
 
     logger.info("Admin panel listening on http://%s:%s", ADMIN_HOST, ADMIN_PORT)
 
-    create_app().run(host=ADMIN_HOST, port=ADMIN_PORT)
+    # Waitress rather than `app.run()`: Flask's built-in server is a
+    # development convenience and its own documentation says not to deploy it.
+    # Waitress is pure Python, so there is nothing to build on the VPS and the
+    # start command stays `python admin_panel.py` — no unit file changes.
+    serve(create_app(), host=ADMIN_HOST, port=ADMIN_PORT, threads=ADMIN_THREADS)
 
 
 if __name__ == "__main__":

@@ -32,6 +32,7 @@
 
 <h2>Дії</h2>
 <form method="post" action="{{ url_for('user_action', telegram_id=user.telegram_id) }}" class="inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <button name="action" value="pause">Пауза</button>
   <button name="action" value="resume">Відновити</button>
   <button name="action" value="finish">Завершити цикл</button>

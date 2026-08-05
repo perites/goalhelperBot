@@ -26,6 +26,7 @@
       <div class="panel-actions">
         {% if not row.cohort.is_active %}
         <form method="post" action="{{ url_for('cohort_activate', cohort_id=row.cohort.id) }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button>Зробити активною</button>
         </form>
         {% endif %}

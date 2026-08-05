@@ -7,6 +7,7 @@
   {% else %}
     <form method="post" action="{{ action }}" class="inline"
           onsubmit='return confirm({{ confirm | tojson }})'>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="danger">Видалити</button>
     </form>
   {% endif %}
@@ -23,6 +24,7 @@
     <p class="muted" style="margin:0 0 12px">{{ hint }}</p>
     <form method="post" action="{{ action }}"
           onsubmit='return confirm({{ confirm | tojson }})'>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="danger">Видалити назавжди</button>
     </form>
   {% endif %}

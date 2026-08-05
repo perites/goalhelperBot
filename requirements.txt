@@ -6,6 +6,12 @@ python-dotenv==1.2.2
 # Admin panel
 Flask==3.1.3
 
+# The WSGI server the panel actually runs on. Flask's built-in one is a
+# development convenience and says so itself. Waitress is pure Python, so there
+# is nothing to compile on the VPS and it runs on Windows too, which keeps
+# `python admin_panel.py` the same command everywhere.
+waitress==3.0.2
+
 # Testing
 pytest==9.1.1
 pytest-asyncio==1.4.0

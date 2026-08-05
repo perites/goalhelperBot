@@ -11,6 +11,7 @@ import secrets
 
 from flask import Flask, render_template
 
+from admin import csrf
 from admin.routes import register_all
 from core import models
 from core.logs import ROOT_LOGGER_NAME, get_logger
@@ -43,6 +44,14 @@ def _attach_logging(app):
 def _register_error_pages(app):
     """A 404 or a 500 should still look like the panel, and a 500 should leave
     a line in the log — the route that raised it may not have."""
+
+    @app.errorhandler(400)
+    def bad_request(error):
+        return render_template(
+            "error.html",
+            code=400,
+            message="Форма застаріла або дані не читаються. Відкрийте сторінку заново.",
+        ), 400
 
     @app.errorhandler(404)
     def not_found(error):
@@ -88,6 +97,7 @@ def create_app():
             models.db.close()
 
     _register_error_pages(app)
+    csrf.protect(app)
     register_all(app)
 
     return app

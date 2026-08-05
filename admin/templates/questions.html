@@ -57,9 +57,11 @@
           </div>
           <div class="qactions">
             <form method="post" action="{{ url_for('question_duplicate', question_id=question.id) }}" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button title="Створити копію">Дублювати</button>
             </form>
             <form method="post" action="{{ url_for('question_retire', question_id=question.id) }}" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="{{ '' if question.retired else 'danger' }}">
                 {{ 'Повернути' if question.retired else 'Зняти' }}</button>
             </form>
@@ -87,9 +89,11 @@
           </div>
           <div class="qactions">
             <form method="post" action="{{ url_for('question_duplicate', question_id=follow_up.id) }}" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button title="Копія під тим самим питанням">Дублювати</button>
             </form>
             <form method="post" action="{{ url_for('question_retire', question_id=follow_up.id) }}" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="{{ '' if follow_up.retired else 'danger' }}">
                 {{ 'Повернути' if follow_up.retired else 'Зняти' }}</button>
             </form>
@@ -129,6 +133,7 @@
         </div>
         <div class="qactions">
           <form method="post" action="{{ url_for('final_question_retire', question_id=question.id) }}" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="{{ '' if question.retired else 'danger' }}">
               {{ 'Повернути' if question.retired else 'Зняти' }}</button>
           </form>
@@ -147,6 +152,7 @@
   <section class="panel">
     <h2 class="panel-h">Додати підсумкове питання</h2>
     <form method="post" action="{{ url_for('final_question_add') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="row"><textarea name="text" required></textarea></div>
       <button class="primary" type="submit">Додати</button>
     </form>

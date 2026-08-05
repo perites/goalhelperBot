@@ -79,12 +79,39 @@ def at_level(lines, level):
     return [line for line in lines if f" {level} " in line]
 
 
+def tail(path, count, block_size=8192):
+    """The last `count` lines, read backwards from the end.
+
+    This used to read the whole file and then slice, which meant the dashboard
+    — where it runs on every render — got slower all day and only recovered at
+    midnight when the log rotated. Cost now depends on how much is wanted, not
+    on how long the bot has been up.
+
+    Reading stops once there are more newlines than lines asked for, so the
+    first line in the buffer is usually a partial one. Taking the last `count`
+    drops it, which is also what makes decoding a chunk that starts
+    mid-character harmless.
+    """
+    with path.open("rb") as handle:
+        handle.seek(0, 2)
+        position = handle.tell()
+        buffer = b""
+
+        while position > 0 and buffer.count(b"\n") <= count:
+            step = min(block_size, position)
+            position -= step
+            handle.seek(position)
+            buffer = handle.read(step) + buffer
+
+    return buffer.decode("utf-8", errors="replace").splitlines()[-count:]
+
+
 def log_lines(count, path, level=None):
     if not path.exists():
         return []
 
-    with path.open(encoding="utf-8", errors="replace") as handle:
-        lines = handle.readlines()[-count * 4:]
+    # Over-read, because the level filter may throw most of it away.
+    lines = tail(path, count * 4)
 
     return [line.rstrip() for line in at_level(lines, level)[-count:]]
 

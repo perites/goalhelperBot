@@ -17,7 +17,9 @@ dashboard and the logs page would read real bot logs, and results would differ
 from machine to machine. Pointing it somewhere empty keeps these hermetic.
 """
 import pytest
+from flask.testing import FlaskClient
 
+from admin import csrf
 from admin.app import create_app
 from core import models as database
 from core.models import (
@@ -82,16 +84,52 @@ def app(log_dir, monkeypatch):
     return application
 
 
+class PanelClient(FlaskClient):
+    """A test client that posts the CSRF token, the way a rendered page does.
+
+    Without this every POST test would be a test of the CSRF guard and nothing
+    else. Tests that want to exercise the guard itself pass `csrf_token`
+    explicitly, which is left alone.
+    """
+
+    def open(self, *args, **kwargs):
+        # `open` rather than `post`: every verb helper funnels through here, so
+        # a test calling `.open(path, method="POST")` is covered too.
+        method = (kwargs.get("method") or "GET").upper()
+
+        if method in csrf.UNSAFE_METHODS:
+            data = kwargs.get("data") or {}
+
+            if isinstance(data, dict) and csrf.FIELD not in data:
+                with self.session_transaction() as stored:
+                    token = stored.get(csrf.FIELD)
+
+                if token is not None:
+                    kwargs["data"] = {**data, csrf.FIELD: token}
+
+        return super().open(*args, **kwargs)
+
+
+def _client(app):
+    """A client holding a session, so it has a token to post with — the same
+    thing a browser gets from loading any page."""
+    app.test_client_class = PanelClient
+    test_client = app.test_client()
+    test_client.get("/login")
+
+    return test_client
+
+
 @pytest.fixture
 def anon(app):
     """A client that has not logged in."""
-    return app.test_client()
+    return _client(app)
 
 
 @pytest.fixture
 def client(app):
     """A logged-in client, which is what most of these tests want."""
-    test_client = app.test_client()
+    test_client = _client(app)
     response = test_client.post("/login", data={"password": PASSWORD})
 
     assert response.status_code == 302, "the fixture itself failed to authenticate"

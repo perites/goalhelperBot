@@ -6,6 +6,7 @@ allowlist it checks against is worth pinning down.
 import json
 import logging
 
+from admin import logfiles
 from core.settings import ADMIN_LOG_FILE_NAME, LOG_FILE_NAME
 from core.logs import ROOT_LOGGER_NAME, alert_handler, configure_logging
 
@@ -141,6 +142,49 @@ def test_a_file_that_is_not_listed_cannot_be_downloaded(client, log_dir):
     assert client.get("/logs/download/secret.txt").status_code == 404
     assert client.get("/logs/download/../secret.txt").status_code in (301, 404)
     assert client.get("/logs/download/nothing.log").status_code == 404
+
+
+# --- reading from the end --------------------------------------------------
+
+def test_only_the_last_lines_are_read(log_dir):
+    """It used to read the whole file and then slice, so the dashboard got
+    slower every hour and only recovered when the log rotated at midnight."""
+    _write_log(log_dir, *[f"line {index}" for index in range(5000)])
+
+    assert logfiles.tail(log_dir / LOG_FILE_NAME, 3) == [
+        "line 4997", "line 4998", "line 4999",
+    ]
+
+
+def test_a_short_file_is_returned_whole(log_dir):
+    _write_log(log_dir, "only one")
+
+    assert logfiles.tail(log_dir / LOG_FILE_NAME, 100) == ["only one"]
+
+
+def test_an_empty_file_reads_as_nothing(log_dir):
+    (log_dir / LOG_FILE_NAME).write_bytes(b"")
+
+    assert logfiles.tail(log_dir / LOG_FILE_NAME, 10) == []
+
+
+def test_a_line_spanning_a_block_boundary_is_not_torn(log_dir):
+    """The read walks backwards in blocks, so a long line is reassembled from
+    more than one of them."""
+    long_line = "x" * 20000
+    _write_log(log_dir, "before", long_line, "after")
+
+    assert logfiles.tail(log_dir / LOG_FILE_NAME, 2, block_size=512) == [
+        long_line, "after",
+    ]
+
+
+def test_multibyte_characters_survive_the_block_boundary(log_dir):
+    """Cyrillic is two bytes a character, so a block can begin mid-character."""
+    lines = [f"рядок номер {index}" for index in range(400)]
+    _write_log(log_dir, *lines)
+
+    assert logfiles.tail(log_dir / LOG_FILE_NAME, 2, block_size=64) == lines[-2:]
 
 
 # --- the panel's own log ---------------------------------------------------

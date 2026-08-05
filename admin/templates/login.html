@@ -20,6 +20,7 @@
 </head>
 <body>
 <form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <h1>Я хочу бот</h1>
   <input type="password" name="password" placeholder="Пароль" autofocus required>
   <button type="submit">Увійти</button>

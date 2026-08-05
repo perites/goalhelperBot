@@ -9,6 +9,7 @@
 </div>
 
 <form method="post" id="question-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="options" id="options-json"
          value="{{ question.options if question and question.options else '' }}">
 
