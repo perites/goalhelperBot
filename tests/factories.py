@@ -112,7 +112,7 @@ def build_cohort(**overrides):
         "max_people": MAX_PEOPLE,
         "questions_per_day": QUESTIONS_PER_DAY,
         "category_order": CATEGORY_ORDER_CSV,
-        "status": CohortStatus.ENROLLING,
+        "status": CohortStatus.RUNNING,
     }
     fields.update(overrides)
 

@@ -48,13 +48,25 @@
       </div>
 
       <div class="row">
-        <label>Статус</label>
-        <select name="status">
-          {% for status in statuses %}
-            <option value="{{ status.value }}"
-              {{ 'selected' if cohort and cohort.status == status.value }}>{{ status.name }}</option>
-          {% endfor %}
-        </select>
+        <label>Стан</label>
+        {% if ended %}
+          <div><span class="tag">ENDED</span></div>
+          <div class="hint">
+            Когорту завершено — усі учасники пройшли свій цикл. Стан більше не змінюється.
+          </div>
+        {% else %}
+          <select name="status">
+            {% for status in statuses %}
+              <option value="{{ status.value }}"
+                {{ 'selected' if cohort and cohort.status == status.value }}>{{ status.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="hint">
+            PLANNED — набір закритий, хоч би які були дати. RUNNING — набір іде за
+            датами й кількістю місць. ENDED виставляється сам, коли ніхто вже не
+            проходить цикл.
+          </div>
+        {% endif %}
       </div>
     </section>
 

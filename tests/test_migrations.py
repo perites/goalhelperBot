@@ -36,6 +36,13 @@ def _never_runs(database):
     raise AssertionError("a migration ran against a database that never needed it")
 
 
+def _rewind(target):
+    """`initialize_database` stamps a new file at `latest_version`, which is no
+    longer 0. The tests below are about a database with steps still pending, so
+    wind the header back to before the list they monkeypatch in."""
+    target.pragma("user_version", 0)
+
+
 # --- how the database is opened --------------------------------------------
 
 def test_foreign_keys_are_enforced(db):
@@ -85,7 +92,8 @@ def test_a_new_database_is_stamped_at_the_latest_version(db, monkeypatch):
 # --- catching an existing database up --------------------------------------
 
 def test_pending_steps_run_in_order(db, monkeypatch):
-    initialize_database()  # now it exists, stamped at 0
+    initialize_database()
+    _rewind(db)  # as if it predates the list below
     applied = []
 
     monkeypatch.setattr(migrations, "MIGRATIONS", [
@@ -100,6 +108,7 @@ def test_pending_steps_run_in_order(db, monkeypatch):
 
 def test_a_step_runs_only_once(db, monkeypatch):
     initialize_database()
+    _rewind(db)
     applied = []
     monkeypatch.setattr(
         migrations, "MIGRATIONS", [("only", lambda _: applied.append(1))],
@@ -128,6 +137,7 @@ def test_a_step_can_actually_change_the_schema(db, monkeypatch):
         ))
 
     initialize_database()
+    _rewind(db)
     monkeypatch.setattr(
         migrations, "MIGRATIONS", [("add user.reminder_sent", add_column)],
     )
@@ -147,6 +157,7 @@ def test_a_failed_step_leaves_the_database_where_it_was(db, monkeypatch):
         raise RuntimeError("ALTER TABLE went wrong")
 
     initialize_database()
+    _rewind(db)
     monkeypatch.setattr(migrations, "MIGRATIONS", [
         ("fine", lambda _: applied.append("fine")),
         ("broken", explodes),
@@ -181,8 +192,12 @@ def test_the_refusal_says_what_to_do(db, monkeypatch):
     assert "7" in message and "newer version" in message
 
 
-def test_there_are_no_migrations_yet(db):
-    """A canary. Every test above monkeypatches MIGRATIONS, so if a real one is
-    ever added they all keep passing while `latest_version` quietly moves — and
-    the fresh-database stamp is the thing that would go wrong first."""
-    assert latest_version() == 0
+def test_the_migration_list_is_the_length_this_module_expects(db):
+    """A canary. Every test above monkeypatches MIGRATIONS, so none of them
+    would notice `latest_version` moving underneath — and the fresh-database
+    stamp is the thing that goes wrong first when it does.
+
+    Adding a migration is meant to fail here. Check that a new database is
+    still stamped at the top, that `_rewind` still winds far enough back, and
+    then bump the number."""
+    assert latest_version() == 1

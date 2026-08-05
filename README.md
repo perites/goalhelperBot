@@ -130,9 +130,7 @@ and 30 days are kept.
 partway through it, including the name and intention they have typed so far. It
 is overwritten as they progress and cleared when they finish.
 
-**Backups** contain all of the above — see
-[deploy/backup.sh](deploy/backup.sh). They belong somewhere as private as the
-server itself.
+**Backups** contain all of the above
 
 **There is no erasure path.** Deleting a participant means deleting their rows
 by hand, and the foreign keys will make you do it in the right order (answers,

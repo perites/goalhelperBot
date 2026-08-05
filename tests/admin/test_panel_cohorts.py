@@ -15,7 +15,7 @@ FORM = {
     "max_people": "10",
     "duration_days": "30",
     "questions_per_day": "3",
-    "status": str(int(CohortStatus.ENROLLING)),
+    "status": str(int(CohortStatus.RUNNING)),
     "category_order": "0,1,3",
 }
 

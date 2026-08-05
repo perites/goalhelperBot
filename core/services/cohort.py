@@ -62,6 +62,13 @@ def enrollment_state(cohort=None):
     if cohort is None or cohort.status == CohortStatus.ENDED:
         return EnrollmentState.NO_COHORT
 
+    # Not launched yet, whatever the dates say. Reported as NOT_OPEN_YET rather
+    # than NO_COHORT because that is the truthful message — the run exists and
+    # has not opened — and because it becomes true on its own once the admin
+    # promotes the cohort and the opening day arrives.
+    if cohort.status == CohortStatus.PLANNED:
+        return EnrollmentState.NOT_OPEN_YET
+
     today = clock.today_kyiv()
 
     if today < cohort.enrollment_opens:

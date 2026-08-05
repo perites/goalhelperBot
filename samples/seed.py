@@ -87,7 +87,10 @@ def seed_default_cohort():
         max_people=MAX_PEOPLE,
         questions_per_day=QUESTIONS_PER_DAY,
         category_order=CATEGORY_ORDER_CSV,
-        status=CohortStatus.ENROLLING,
+        # RUNNING, not PLANNED: a demo database is meant to be joinable the
+        # moment it exists. A real cohort starts PLANNED and is launched by
+        # hand from the panel.
+        status=CohortStatus.RUNNING,
     )
 
     logger.warning(

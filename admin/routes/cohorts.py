@@ -15,6 +15,11 @@ from core.services.deletion import DeletionBlocked, cohort_blocker, delete_cohor
 
 logger = get_logger(__name__)
 
+# ENDED is left out on purpose: the daily sweep sets it, once no participant is
+# still running. Offering it here would let the panel end a cohort without
+# standing it down, which is the other half of what ending one means.
+SETTABLE_STATUSES = [CohortStatus.PLANNED, CohortStatus.RUNNING]
+
 
 def register(app):
     @app.route("/cohorts")
@@ -43,6 +48,10 @@ def register(app):
         if cohort_id and cohort is None:
             abort(404)
 
+        # An ended cohort keeps its status: the form stops offering the field
+        # rather than offering it and refusing every value.
+        ended = cohort is not None and cohort.status == CohortStatus.ENDED
+
         if request.method == "POST":
             try:
                 fields = {
@@ -56,12 +65,16 @@ def register(app):
                         request.form, "duration_days", "Тривалість циклу"),
                     "questions_per_day": forms.int_field(
                         request.form, "questions_per_day", "Питань на день"),
-                    "status": forms.enum_field(
-                        request.form, "status", "Стан", CohortStatus),
                     # The builder posts one hidden field holding the whole order,
                     # since the same category may appear several times.
                     "category_order": forms.category_order_field(request.form),
                 }
+
+                if not ended:
+                    fields["status"] = forms.enum_field(
+                        request.form, "status", "Стан", CohortStatus,
+                        allowed=SETTABLE_STATUSES,
+                    )
             except forms.FormError as error:
                 flash(str(error), "error")
                 return redirect(url_for("cohort_form", cohort_id=cohort_id))
@@ -91,7 +104,8 @@ def register(app):
             # A new cohort starts with no rhythm: the builder is where it gets
             # decided, and the preview says plainly what empty means.
             order=[int(t) for t in cohort.categories] if cohort else [],
-            statuses=list(CohortStatus),
+            statuses=SETTABLE_STATUSES,
+            ended=ended,
             blocked=cohort_blocker(cohort) if cohort else None,
         )
 

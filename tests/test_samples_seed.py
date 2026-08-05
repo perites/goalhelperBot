@@ -60,7 +60,7 @@ def test_the_default_cohort_states_every_setting():
     cohort = seed_default_cohort()
 
     assert cohort.is_active is True
-    assert cohort.status == CohortStatus.ENROLLING
+    assert cohort.status == CohortStatus.RUNNING
     assert cohort.duration_days
     assert cohort.max_people
     assert cohort.questions_per_day

@@ -47,17 +47,24 @@ class QuestionType(IntEnum):
 
 
 class CohortStatus(IntEnum):
-    """Where a cohort is in its life.
+    """Where a cohort is in its life. Each value decides something.
 
-    Only ENDED changes what the bot does — it is what closes enrollment for
-    good, via `enrollment_state`. The other three are labels the admin sets and
-    reads; whether a cohort is taking people is decided by its dates, its
-    capacity and `is_active`, not by this. Kept as-is because the values are
-    already stored in the database.
+    PLANNED and ENDED both close enrollment outright. Only RUNNING hands the
+    question to the dates and the seat count — so a cohort promoted ahead of
+    its opening day still turns people away until that day arrives, and starts
+    taking them the moment it does, with nothing left to remember to press.
+
+    The two transitions have different owners. PLANNED -> RUNNING is the
+    admin's, deliberately: it is the act of launching a cohort, and nothing
+    should do it on a date's say-so. RUNNING -> ENDED belongs to the daily
+    sweep, once no participant is still working through their cycle.
+
+    Values are stored in the database, so they are never renumbered. 1 is a
+    gap where ENROLLING used to be — it said "taking people" but did not
+    actually decide it, which is the job RUNNING now has.
     """
 
     PLANNED = 0
-    ENROLLING = 1
     RUNNING = 2
     ENDED = 3
 

@@ -43,9 +43,22 @@ from core.logs import get_logger
 
 logger = get_logger(__name__)
 
+def _retire_enrolling_status(database):
+    """CohortStatus.ENROLLING (1) is gone. RUNNING (2) is what it meant.
+
+    Mapping it to PLANNED instead would close enrollment on a cohort that was
+    taking people right up until the deploy. Written as a literal 2 rather than
+    CohortStatus.RUNNING on purpose: this step has to keep describing the same
+    change even if the enum moves again.
+    """
+    database.execute_sql("UPDATE cohort SET status = 2 WHERE status = 1")
+
+
 # (description, step) pairs. The version of a database is how many of these it
 # has applied, so position in this list is identity — see the warning above.
-MIGRATIONS = []
+MIGRATIONS = [
+    ("cohort.status: retire ENROLLING, fold into RUNNING", _retire_enrolling_status),
+]
 
 
 class SchemaTooNew(RuntimeError):

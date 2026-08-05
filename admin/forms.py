@@ -70,15 +70,25 @@ def date_field(form, name, label):
         )
 
 
-def enum_field(form, name, label, enum):
+def enum_field(form, name, label, enum, allowed=None):
     """One `int()` and one lookup, so a value that is not a number and a number
-    that is not a member fail the same way."""
+    that is not a member fail the same way.
+
+    `allowed` narrows it further, for a field where some members exist but are
+    not the form's to set — the posted value is checked here rather than only
+    hidden from the select, since the select is not what enforces it.
+    """
     raw = (form.get(name) or "").strip()
 
     try:
-        return enum(int(raw))
+        value = enum(int(raw))
     except ValueError:
         raise FormError(f"«{label}»: невідоме значення «{raw}».")
+
+    if allowed is not None and value not in allowed:
+        raise FormError(f"«{label}»: значення «{value.name}» не встановлюють вручну.")
+
+    return value
 
 
 def category_order_field(form, name="category_order"):
