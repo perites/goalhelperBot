@@ -111,8 +111,8 @@ sqlite3 goalbot.db 'PRAGMA user_version;'
 
 Worth being able to answer plainly, since participants consented to it.
 
-**What is stored, in `goalbot.db`:** a participant's Telegram id and username,
-the name they gave, their intention and its category, the times they chose,
+**What is stored, in `goalbot.db`:** a participant's Telegram id, the name they
+gave, their intention and its category, the times they chose,
 every answer they wrote and every question they skipped, and their closing
 reflection. This is the point of the product — it is what the statistics screen
 and the final summary are made from.

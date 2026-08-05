@@ -18,7 +18,7 @@
   <tr>
     <td><a href="{{ url_for('user_detail', telegram_id=row.user.telegram_id) }}">
       {{ row.user.name or '—' }}</a></td>
-    <td class="muted">{% if row.user.username %}@{{ row.user.username }}{% else %}{{ row.user.telegram_id }}{% endif %}</td>
+    <td class="muted">{{ row.user.telegram_id }}</td>
     <td><span class="tag {{ 'on' if row.status.name == 'ACTIVE' }}">{{ row.status.name }}</span></td>
     <td class="muted">{{ row.user.cycle_day if row.user.date_started else '—' }}</td>
     <td>{{ row.answered }}</td>

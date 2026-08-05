@@ -155,7 +155,7 @@ def waitlisted():
     """Exactly what `/start` creates when enrollment is closed or full:
     `put_on_waitlist` sets `cohort = None` deliberately."""
     return User.create(
-        telegram_id=777, username="waiting", status=Status.WAITLIST, cohort=None,
+        telegram_id=777, status=Status.WAITLIST, cohort=None,
     )
 
 
@@ -177,6 +177,6 @@ def test_detail_page_of_a_waitlisted_user_renders(client, waitlisted):
 
 
 def test_detail_page_of_a_user_still_onboarding_renders(client):
-    User.create(telegram_id=778, username="halfway", status=Status.ONBOARDING, cohort=None)
+    User.create(telegram_id=778, status=Status.ONBOARDING, cohort=None)
 
     assert client.get("/users/778").status_code == 200

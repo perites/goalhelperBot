@@ -54,10 +54,32 @@ def _retire_enrolling_status(database):
     database.execute_sql("UPDATE cohort SET status = 2 WHERE status = 1")
 
 
+def _drop_user_username(database):
+    """Stop keeping participants' @usernames, and erase the ones already kept.
+
+    A Telegram id is what the bot needs to reach someone; an @username is a
+    public identity that ties this database to the rest of their life, and it
+    was never used for anything. Dropping the column is the deletion — there is
+    nowhere else it was written.
+    """
+    from playhouse.migrate import SqliteMigrator, migrate as run
+
+    # A database built by a `create_tables` that never knew the column is
+    # already where this wants it. Reachable by rewinding `user_version`, which
+    # the tests do, and cheap insurance besides — dropping a column that is not
+    # there aborts the whole transaction.
+    if "username" not in {column.name for column in database.get_columns("user")}:
+        logger.info("user.username is already gone; nothing to drop")
+        return
+
+    run(SqliteMigrator(database).drop_column("user", "username"))
+
+
 # (description, step) pairs. The version of a database is how many of these it
 # has applied, so position in this list is identity — see the warning above.
 MIGRATIONS = [
     ("cohort.status: retire ENROLLING, fold into RUNNING", _retire_enrolling_status),
+    ("user.username: stop storing it, drop what was stored", _drop_user_username),
 ]
 
 

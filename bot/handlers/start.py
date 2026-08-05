@@ -4,10 +4,6 @@ from telegram.ext import CommandHandler, ContextTypes
 
 from bot import callbacks
 from bot.handlers.menu import main_menu_keyboard
-from core.enums import EnrollmentState, Status
-from core.logs import get_logger
-from core.models import User
-from core.services.cohort import enrollment_state, put_on_waitlist
 from bot.texts import (
     cohort_already_stopped_message,
     cohort_finished_message,
@@ -17,6 +13,10 @@ from bot.texts import (
     start_message,
     start_message_button,
 )
+from core.enums import EnrollmentState, Status
+from core.logs import get_logger
+from core.models import User
+from core.services.cohort import enrollment_state, put_on_waitlist
 
 logger = get_logger(__name__)
 
@@ -31,7 +31,7 @@ WAITLIST_MESSAGES = {
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user, _ = User.get_or_create(
         telegram_id=update.effective_user.id,
-        defaults={"status": Status.ONBOARDING, "username": update.effective_user.username},
+        defaults={"status": Status.ONBOARDING},
     )
 
     # Re-running onboarding would reset an active participant's cycle, so just

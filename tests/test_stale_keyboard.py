@@ -52,7 +52,7 @@ def context_for(bot):
 def half_onboarded(cohort):
     """The row /start creates before onboarding fills anything in."""
     return User.create(
-        telegram_id=99, username="half", status=Status.ONBOARDING, cohort=cohort,
+        telegram_id=99, status=Status.ONBOARDING, cohort=cohort,
     )
 
 

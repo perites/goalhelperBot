@@ -31,7 +31,7 @@ def test_users_export_is_a_download(client):
 def test_users_export_has_a_header_even_when_empty(client):
     rows = _rows(client.get("/export/users.csv"))
 
-    assert rows[0][:3] == ["telegram_id", "username", "name"]
+    assert rows[0][:2] == ["telegram_id", "name"]
     assert len(rows) == 1
 
 
@@ -43,21 +43,21 @@ def test_users_export_lists_one_row_per_participant(client, cohort, make_user):
     by_id = {row[0]: row for row in rows[1:]}
 
     assert set(by_id) == {"901", "902"}
-    assert by_id["901"][2] == first.name
-    assert by_id["901"][3] == "ACTIVE"
-    assert "09:00" in by_id["901"][6] and "19:00" in by_id["901"][6]
+    assert by_id["901"][1] == first.name
+    assert by_id["901"][2] == "ACTIVE"
+    assert "09:00" in by_id["901"][5] and "19:00" in by_id["901"][5]
 
 
 def test_users_export_includes_people_with_no_cohort(client):
     """The waitlist is exactly who Ксенія wants to contact when a place opens,
     so it must survive the export — this reads `cycle_day`, which copes with a
     missing cohort, rather than `cycle_length`, which does not."""
-    User.create(telegram_id=903, username="waiting", status=Status.WAITLIST, cohort=None)
+    User.create(telegram_id=903, status=Status.WAITLIST, cohort=None)
 
     rows = _rows(client.get("/export/users.csv"))
 
     assert rows[1][0] == "903"
-    assert rows[1][3] == "WAITLIST"
+    assert rows[1][2] == "WAITLIST"
 
 
 def test_answers_export_is_a_download(client):

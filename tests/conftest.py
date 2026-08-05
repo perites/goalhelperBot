@@ -127,7 +127,6 @@ def make_user(cohort):
     def _make(telegram_id=1, status=Status.ACTIVE, started_days_ago=0, slots=(), **kwargs):
         user = User.create(
             telegram_id=telegram_id,
-            username=f"user{telegram_id}",
             name=f"Name{telegram_id}",
             intention="Я хочу побудувати звичку",
             intention_type=3,

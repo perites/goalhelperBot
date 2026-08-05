@@ -35,13 +35,13 @@ def register(app):
     @login_required
     def export_users():
         rows = [(
-            "telegram_id", "username", "name", "status", "intention",
+            "telegram_id", "name", "status", "intention",
             "category", "slots", "started", "cycle_day", "answered", "skipped",
         )]
 
         for user in User.select():
             rows.append((
-                user.telegram_id, user.username, user.name, Status(user.status).name,
+                user.telegram_id, user.name, Status(user.status).name,
                 user.intention, user.intention_type,
                 format_slots(saved_slots(user)), user.date_started,
                 user.cycle_day, answered_count(user), skipped_count(user),

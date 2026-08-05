@@ -7,7 +7,7 @@
 </h1>
 
 <table>
-  <tr><th>Telegram</th><td>{% if user.username %}@{{ user.username }}{% endif %} ({{ user.telegram_id }})</td></tr>
+  <tr><th>Telegram</th><td>{{ user.telegram_id }}</td></tr>
   <tr><th>Намір</th><td>{{ user.intention or '—' }}</td></tr>
   <tr><th>Час повідомлень</th><td>{{ slots }}</td></tr>
   <tr><th>Старт</th><td>{{ user.date_started or '—' }}</td></tr>

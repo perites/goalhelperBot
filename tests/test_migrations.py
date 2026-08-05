@@ -200,4 +200,4 @@ def test_the_migration_list_is_the_length_this_module_expects(db):
     Adding a migration is meant to fail here. Check that a new database is
     still stamped at the top, that `_rewind` still winds far enough back, and
     then bump the number."""
-    assert latest_version() == 1
+    assert latest_version() == 2

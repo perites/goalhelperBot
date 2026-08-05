@@ -281,7 +281,7 @@ def test_blocked_delete_leaves_the_transaction_usable():
     question = make_question(order=9000)
     Answer.create(
         user=User.create(
-            telegram_id=99, username="u", name="N", consent=True,
+            telegram_id=99, name="N", consent=True,
             status=Status.ACTIVE, date_started=clock.now_kyiv(),
         ),
         question=question, sent_at=clock.now_kyiv(),

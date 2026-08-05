@@ -101,8 +101,10 @@ class Cohort(BaseModel):
 
 
 class User(BaseModel):
+    # The Telegram id is the only handle kept. It is what the bot needs to
+    # reach someone, and unlike an @username it is not a public identity that
+    # ties this database to the rest of a participant's life.
     telegram_id = IntegerField(primary_key=True)
-    username = CharField()
     name = CharField(null=True)
     intention = TextField(null=True)
     intention_type = IntegerField(null=True)
